@@ -1,4 +1,4 @@
-package com.study.udf;
+package hive.udf;
 
 import java.util.HashMap;
 import java.util.Map;

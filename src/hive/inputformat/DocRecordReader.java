@@ -1,4 +1,4 @@
-package com.study.inputformat;
+package hive.inputformat;
 
 import java.io.IOException;
 

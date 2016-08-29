@@ -1,4 +1,4 @@
-package com.study.outputformat;
+package hive.outputformat;
 
 import java.io.IOException;
 import java.util.Properties;

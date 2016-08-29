@@ -1,4 +1,4 @@
-package com.study.hive;
+package hive;
 
 abstract class Test {
 	 protected  void finished(){

@@ -1,4 +1,4 @@
-package com.study.udf;
+package hive.udf;
 
 import org.apache.hadoop.hive.ql.exec.Description;
 import org.apache.hadoop.hive.ql.exec.UDFArgumentTypeException;

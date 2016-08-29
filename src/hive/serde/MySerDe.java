@@ -1,4 +1,4 @@
-package com.study.serde;
+package hive.serde;
 
 import java.util.ArrayList;
 import java.util.Arrays;
