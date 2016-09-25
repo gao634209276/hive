@@ -1,0 +1,132 @@
+UDF
+自定义函数
+UDAD
+
+UDF用户自定义函数(user defined function)
+	针对单条记录
+	创建函数过程:
+		自定义一个java类,继承UDF类
+		重写evaluate方法
+		打jar包,然后hive中执行add jar
+		hive执行创建模板函数
+		hql中使用
+	
+	
+	demo See:udf.udftest.java
+	然后add jar /opt/app/jar/hiveudf.jar;
+	创建udf的function:
+		create temporary function bigthan as 'com.study.udf.udftest';
+	测试表m的数据:
+		A	1
+		C	5
+		B	2
+		C	3
+	使用udf:
+		select col1,col2,bigthan(col2,3) from m;
+		A	1	false
+		C	5	true
+		B	2	false
+		C	3	false
+	udf,map针对文件每条记录
+	data-->map()-->file
+
+UDAF
+-------------------
+UDAF用户自定义聚合函数
+	user defined aggregation function,
+	针对记录集合
+
+	开发通用UDAF有两个步骤
+		第一个是编写resolver类,resolver负责类检查,操作符重载
+		第二个是编写evaluator类,evaluator真正实现udaf的逻辑
+	通常来说,顶层UDAF类继承org.apache.hadoop.hive.ql.udf.GenericUDADResolver2,
+		里面编写嵌套类evaluator实现UDAF的逻辑
+	
+	一,实现resolver
+		resolver通常继承org.apache.hadoop.hive.ql.udf.GenericUDADResolver2,
+		但是更建议继承AbstractGenericUDAFResolver,隔离将来hive接口的变化,
+		GenericUDADResolver和GenericUDAFResolver2接口的区别是,
+		后面允许evaluator实现可以访问更多的信息,例如DISTINCT限定符,通配符FUNCTION(*)
+	二,实现evaluator
+		所有evaluators必须继承抽象类oag.apache.hadoop.hive.ql.udf.generic.GenericUDAFEvaluator,
+		子类必须实现它的一些抽象方法,实现UDAD的逻辑
+	
+Mode 
+	这个类比较重要,它表示了udaf在mapreduce的各个阶段,
+	理解Mode的含义,就可以理解hive的UDAD的运行流程
+	public static enum Mode{
+		PARTIAL1,
+			这个是mapreduce的map阶段:
+			从原始数据到部分数据聚合,
+			将会调用iterate()和terminatePartital()
+			iterate()遍历数据源,一条一条读取,并对单条操作处理
+			terminatePartital()部分数据返回,map单条数据结果作为部分返回上一层
+		PARTIAL2,
+			这个是mapreduce的map端的Combiner阶段,
+			负责在map端合并map的数据,从部分数据聚合到部分数据聚合,
+			将会调用merge()和terminatePartial()
+			merge()将map端数据进行合并,terminatePartial将合并后的数据返回上一层
+			属于优化操作阶段:降低了网络传输以及reduce工作量
+		FINAL,
+			mapreude的reduce阶段:
+			从部分数据的聚合到完全聚合,
+			将会调用merge()和terminate()
+			这里是reduce的merge,然后返回结果
+		COMPLETE
+			如果出现了这个阶段,表示mapreduce只有map,没有reduce,所以map端就直接出结果了,
+			从原始数据直接到完全聚合,
+			将会调用iterate()和terminate()
+			这个阶段一般很少用到
+	};
+	通常hive会执行partital1,partial2,final三个阶段
+	See:udf.udaftest.java	udf.CountBigThan.java
+	
+mapreduce阶段流程概括:
+	原始数据data-->map阶段{
+		init()-->iterate()-->terminatePartial()
+	}
+	-->reduce阶段{
+		init()-->merge()-->terminate()
+	}
+	
+	如果有combiner阶段(优化):
+	原始数据data-->map阶段{
+		init()-->iterate()
+		-->(每个map方法执行)terminatePartial()
+		-->combiner阶段:{
+		merge()-->terminatePartial()//临时的合并,并返回部分结果
+		}
+	}
+	-->reduce阶段{
+		init()-->merge()-->terminate()//返回所有结果
+	}
+	
+	参考hive源码,sum,count操作
+	src.al.src.java.org.apache.hadoop.hive.ql.udf.generic
+	
+永久函数
+如果希望在hive中自定义一个函数,且能永久使用
+	1.则修改源码添加相应的函数类,然后在修改
+	ql.src.java.org.apache.hadoop.hive.ql.exec.FunctionRegistry.java类
+	这个类是注册函数代码,添加相应的注册函数代码,如下:
+	如:system.registerGenericUDF("concat", GenericUDFConcat.class);
+	system.registerUDF("parse_url",UDFParseUrl.class,false);
+	然后重新编译打包安装
+	2.写一个hql文件,讲udf全部放入该文件中
+		执行初始化: hive -i 'hql_file'
+		这时候每次打开hive shell都需要执行该操作
+	2.如果已经是安装好的hive,新建hiverc文件
+		jar包放到安装目录下或者指定目录下
+		$HOME/.hiverc
+		把初始化语句加载到文件中
+
+其他参考:
+	http://www.cnblogs.com/Rudd/p/5137612.html
+
+	
+	
+	
+	
+	
+	
+	

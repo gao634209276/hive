@@ -1,0 +1,17 @@
+一
+	hive基本概念,安装,数据类型,文件格式	
+	hive表操作(创建,显示,描述信息,建表语句,删除,其他方式)
+	hive其他建表操作
+	hive不同文件读取对比
+	hive使用Serde
+	hive分区表
+	hive分桶表
+二
+	hive数据操作
+	hive执行命令方式
+	hive数据操作
+	hive动态分区
+	hive高级查询
+	hive桶
+	hive索引
+	hive视图

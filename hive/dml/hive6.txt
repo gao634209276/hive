@@ -1,0 +1,78 @@
+hive执行命令方式
+	cli,jdbc,hwi,beeline
+	关于beeline:
+		类似于cli,底层shell中使用是jdbc,
+		需要开启hive server2,允许远程操作,比较方便
+
+详细讲解cli shell操作
+	hive -help
+		hive -d,--define <key=value>(用于在hive shell中使用)
+		-e <quoted-query-string>(在shell脚本中用的多,不用进入hive shell中执行)
+		-f <filename> (读取file中的hiveQL)
+		-i <filename> (与-f类似,只是初始化file中的jar,udf等)
+		-S,--silent (沉默)
+		-v,--verbose (输出详细信息)
+	hive --help或hive --service help
+		Usage ./hive <parameters> --service serviceName <service parameters>
+		
+		Service List: beeline cli help hiveburninclient hiveserver2 hiveserver hwi jar lineage metastore metatool orcfiledump rcfilecat schemaTool version 
+		
+		Parameters parsed:
+		  --auxpath : Auxillary jars 
+		  --config : Hive configuration directory
+		  --service : Starts specific service/component. cli is default
+		Parameters used:
+		  HADOOP_HOME or HADOOP_PREFIX : Hadoop install directory
+		  HIVE_OPT : Hive options
+		For help on a particular service:
+		  ./hive --service serviceName --help
+		Debug help:  ./hive --debug --help
+
+练习:
+----------------------------------------------------------
+hive -S -e "select * from testext" > /home/hadoop/test/out
+hive -v -e "select * from testext"
+hive -f /home/hadoop/test/query
+
+#shell脚本执行,简单演示
+#!/bin/bash
+time=`date`
+hive -e "insert table select * from testext where name=${time}"
+#用于日常作业
+#注,命令脚本必须在集群的节点或hiveclient执行
+
+
+
+hive操作-list和source
+	在hive对话框中使用;交互式命令行输入list出现提示帮助,
+		list命令用于显示当前add的jar包
+		source命令用于执行本地文件中的sql语句
+hive> add jar /opt/app/jar/docFileInputFormat.jar;
+Added [/opt/app/jar/docFileInputFormat.jar] to class path
+Added resources: [/opt/app/jar/docFileInputFormat.jar]
+hive> list jar;
+/opt/app/jar/docFileInputFormat.jar
+/opt/app/jar/docFileInputFormat.jar
+hive> source /home/hadoop/test/query;
+OK
+table1	test1
+table2	test2
+Time taken: 1.048 seconds, Fetched: 2 row(s)
+
+
+Hive操作-变量
+----------------------------------
+	配置变量
+		设置:set val='xx';
+		查询使用时候:${hiveconf:val}
+	环境变量
+		hive中可以使用当前系统环境变量,如:
+		${env:HOME}
+练习:
+hive> set val = table1;
+hive> select * from testext where name = '${hiveconf:val}' ;
+table1	test1
+hive> select '${env:HOME}';
+/home/hadoop
+
+	

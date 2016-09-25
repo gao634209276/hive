@@ -1,0 +1,98 @@
+Hive建表其他方式
+	由一个表创建另一个表
+	create table testext_c like testext;
+	从其他表查询并创建一个表
+	create table testext_cc as select name,addr from testext;
+
+不同文件读取对比
+	stored as textfile
+		直接查看或hadoop fs -text
+	stored as sequencefile
+		使用hadoop的text命令查看:hadoop fs -text
+	stored as rcfile
+		rcfile格式特殊,不能直接产生该格式,
+		一般从其他表中读取数据后以插入方式向rcfile格式的表添加数据
+		所以rcfile多用于中间表
+		hadoop不能直接查看:hive-service rcfilecat path
+	stored as inputformat 'class' outformat 'class'//自定义输入输出流
+		
+练习
+----------------------------------------------------------
+使用textfile创建表
+create table test_txt(name string,val string) stored as textfile;
+desc formatted test_txt;
+	InputFormat:    org.apache.hadoop.mapred.TextInputFormat	 
+	OutputFormat:   org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+
+使用sequencefile创建表
+create table test_seq(name string,val string) stored as sequencefile;
+	InputFormat:    org.apache.hadoop.mapred.SequenceFileInputFormat	 
+	OutputFormat:  	org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat
+
+使用rcfile创建表(列式存储结构)
+create table test_rc(name string,val string) stored as rcfile;
+	InputFormat:    org.apache.hadoop.hive.ql.io.RCFileInputFormat	 
+	OutputFormat:   org.apache.hadoop.hive.ql.io.RCFileOutputFormat
+
+自定义inputformat
+	例:
+	See:inputformat.UDInputFormat,UDRecordReader.java
+	export打包在hive中add该jar包
+	add jar /home/hadoop/Documents/export/udinputformat.jar;
+	或者cp /home/hadoop/Documents/export/udinputformat.jar $HIVE_HOME/lib/
+	两者区别:在命令行中add,jar生命周期只在当前交互式cli中生效
+	将其复制到hive的lib目录下将长期有效
+	建表如下:
+drop table testinputformat;
+create table if not exists testinputformat(
+name string comment 'name value',
+addr string comment 'addr value')
+row format delimited fields terminated by '\t' lines terminated by '\n'
+stored as inputformat 'inputformat.UDInputFormat'
+outputformat 'org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat';
+desc formatted testinputformat;
+InputFormat:	inputformat.UDInputFormat	 
+OutputFormat: 	org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat
+
+
+drop table testinputformat;
+create table if not exists testinputformat(
+name string comment 'name value',
+addr string comment 'addr value')
+row format delimited fields terminated by '\t' lines terminated by '\n'
+stored as inputformat 'inputformat.DocFileInputFormat'
+outputformat 'org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat';
+
+desc formatted testinputformat;
+InputFormat:    inputformat.DocFileInputFormat	 
+OutputFormat: 	org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat	
+
+
+
+Hive使用SerDe(Serializer/Deserializer) 
+	由于java面向对象在持久化中使用SerDe,hive将数据结构化也是序列化存储
+	hive使用SerDe(和FileFormat)来读写表的行
+	读写顺序:
+		HDFS文件-->InputFileFormat--><k,v>-->Deserizlizer-->Row对象
+		Row对象-->Serizlizer--><k,v>-->OutputFileFormat-->HDFS文件
+
+自定义SerDe,使用
+---------------------
+create table apachelog(
+host string,identity string,users string,time string,request string,status string,size string,referer string,agent string)
+row format serde 'org.apache.hadoop.hive.serde2.RegexSerDe'
+with serdeproperties("input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([0-9]*) ([0-9]*) ([^ ]*) ([^ ]*)")
+stored as textfile;
+注:input.regex是org.apache.hadoop.hive.serde2.RegexSerDe输入正则正则表达式属性
+([^ ]*)是字符串正则表达式,([0-9]*)是数字正则表达式
+desc formatted apachelog;
+SerDe Library:     org.apache.hadoop.hive.serde2.RegexSerDe	 
+InputFormat:    org.apache.hadoop.mapred.TextInputFormat	 
+OutputFormat:  	org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat	
+数据格式如下:apache.log
+10.10.1.1 test user - post 202 500 refer agent
+10.10.1.2 test root - get 201 501 refer agent
+加载数据:
+load data local inpath'/home/hadoop/test/hive/test/apache.log' overwrite into table apachelog; 
+select * from apachelog;
+

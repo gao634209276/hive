@@ -1,0 +1,62 @@
+混合函数(利用java类,java函数)
+----------------------------
+	java_method(class,method[,arg1[,arg2..]])
+	reflect(class,method[,arg1[,arg2..]])	//反射获取java提供方法
+	hash(a1[,a2..])	//根据参数hash计算
+	根据id,转换为double,利用java的sqrt函数,求平方跟
+
+select java_method("java.lang.Math","sqrt",cast(id as double)) from winfunc;
+10.04987562112089
+10.04987562112089
+10.099504938362077
+10.099504938362077
+10.099504938362077
+10.14889156509222
+10.14889156509222
+10.14889156509222
+
+
+UDTF表函数(一行分多行)
+--------------------------
+	lateralView:
+	lateral view udtf(expression) tableAlias as columnAlias(',' columnAlias)*fromClause: from baseTable(lateralView)*
+
+	例 explode函数,参数为数组//可以将map一行转换为多行
+	将winfunc表type字段按照B切分,生成字符串数组,作为explde函数参数,
+	按照数组元素将原来的一行转换为多行
+	select id, adid from winfunc lateral view explode (split(type,'B')) tt as adid;
+	会将列101	ABC-->转化为一下形式:
+	101	A
+	101	C
+
+
+正则表达式
+=============================
+A like B, 
+	字符"_"表示任意单个字符,而字符"%"表示任意数量的字符
+A rlike B
+select 1 from dual where 'footbar' rlike '^f.*r$';//mysql通用
+	其中:
+	^f表示以f开头,
+	.*表示任意字符
+	r$表示以r结尾
+select 1 from winfunc where 'footbar' rlike '^f.*r$'; //from表必须在hive中存在,字符串要用''
+
+
+### 匹配替换
+regexp_replace(),匹配替换
+select regexp_replace('footbar','oo|ar','')from winfunc;
+	表示:将footbar中的oo或者ar替换为空
+
+regexp_extract()
+select regexp_extract(979|7.10.80|8684,.*\\|(.*),1) from winfunc limit 1;
+	.*任意多个
+	\特殊含义
+	\|将|转义为普通字符
+	.*\\|贪婪匹配表达式
+	整体含义:
+	匹配到最后的一个能匹配的字符
+	.*\\|表示匹配979|7.10.80|8684,一直到最后的|为止.
+	
+select regexp_extract('979|7.10.80|8684','(.*?)\\|(.*)',1) from winfunc limit 1;
+	(.*?)\\|匹配到第一个就停止继续匹配,只匹配一个

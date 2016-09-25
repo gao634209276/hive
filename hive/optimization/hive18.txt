@@ -1,0 +1,133 @@
+hive Job优化
+	
+	并行化执行
+		每个查询被hive转化成多个阶段,有些阶段关联性不大
+		则可以并行化自行,减少执行时间
+		set hive.exec.parallel=true;
+		set hive.exec.parallel.thread.numbe=8;
+		例:
+		select num from (
+		select count(city) as num from city
+		union all 
+		select count(province) as num from province) tmp;
+		这里一共3个job,默认顺序执行,但子查询的两个job彼此没有依赖
+		如果设置并行化后,这时候会同时启动两个job分别执行子查询的两个job
+	
+	本地化执行
+		set hive.exec.mode.local.auto=true;
+		当一个job满足如下条件才能真正使用本地模式:
+			1.job的输入数据大小必须小于参数
+				hive.exec.mode.local.auto.inputbytes.max(默认256MB)
+			2.job的map树必须小于参数:
+				hive.exec.mode.local.auto.tasks.max(默认4)
+			3.job的reduce个数必须为0或者1
+			4.可选:本地模式启动的JVM内存大小
+				hive.mapred.local.mem
+	
+	job合并输入小文件
+		hive.merg.mapfiles=true
+		set hive.input.format=org.apache.hadoop.hive.ql.io.CombineHiveInputFormat
+		合并文件由mapred.max.split.size限制的大小决定
+		其他:hive.mergejob.maponly=true
+			在CombineHiveInputFormat基础上,生成只有Map的任务执行merge
+	job合并输出小文件
+		set hive.merge.smallfiles.avgsize=16000000;
+		当输出文件平均大小小于该值,(启动新job合并文件)
+		set hive.merge.size.per.task=256000000;
+		合并之后的文件大小
+		hive.merge.mapredfiles=false合并reduce输出
+	
+	JVM重利用
+		set mapred.job.reuse.jvm.num.tasks=20;
+		JVM重利用可以是Job长时间保留slot,直到作业结束,
+		这在对于有较多任务和较多小文件的任务是非常有意义的,
+		减少执行时间.
+		当然这个值不能设置过大,因为有些作业会有reduce任务,
+		如果reduce任务没有完成,则map任务占用slot不能释放,
+		其他的作业可能就需要等待.
+	
+	压缩数据
+		中间压缩就是处理hive查询的多个job之间的数据,
+			对于中间压缩,最好选择一个节省cpu耗时的压缩方式
+			set hive.exec.compress.intermediate=true;
+			set hive.intermediate.compression.codec=org.apache.hadoop.io.compress.SnappyCodec;
+			set hive.intermediate.compression.type=BLOCK;
+		hive查询最终的输出也可以压缩:
+			set hive.exec.compress.output=true;
+			set mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec;
+			set maprde.output.compression.type=BLOCK;
+		
+
+Map/Reduce优化:
+	mapreduce运行流程参考:
+		http://blog.csdn.net/xiao_jun_0820/article/details/30458857
+	Map优化
+		set mapred.map.tasks=10;有时候无效
+			默认map个数:
+				//default_num=total_size/block_size;
+			期望大小
+				goal_num=mapred.map.tasks;
+			设置处理的文件大小
+				//split_size=max(mapred.min.split.size,block_size);//老版本
+				split_size=max(minSize, Math.min(maxSize, blockSize))
+				split_num=total_size/split_size;
+			计算的map个数
+				//compute_map_num=min(split_num,max(default_num,goal_num);
+	
+			经过上面分析,在设置map个数的时候,可以简单总结一下几点:
+			1.如果想增加map个数,设置mapred.map.tasks为一个较大值
+			2.如果想减小map个数,则设置mapred.min.split.size为一个较大值
+				情况1:输入文件size巨大,但不是小文件
+					增大mapred.min.split.size
+				情况2:输入文件数量巨大,且都是小文件,单个文件的size小于blocksize
+					增大mapred.min.split.size不可行,需要使用
+					CombineFileInputFormat将多个input path合并成一个InputSplit送个mapper处理
+					从而减少mapper的数量
+		map端聚合
+			set hive.map.aggr=true;
+		推测执行:
+			mapred.map.tasks.speculative.execution
+		
+	Shuffle优化
+		Map端增大:
+			io.sort.mb
+			io.sort.spill.percent
+			min.num.spill.for.combine
+			io.sort.factor
+			io.sort.record.percent
+		Reduce端增大:
+			mapred.reduce.parallel.copies
+			mpared.reduce.copy.backoff
+			io.sort.factor
+			mapred.job.shuffle.input.buffer.percent
+			mapred.job.reduce.input.buffer.percent
+		
+	Reduce优化:
+		需要reduce操作的查询
+			聚合函数:sum,count,distinct...
+			高级查询:group by,join,distrubute by, cluster by ...
+				order by比较特殊,只需要1个reduce
+		推测执行:
+			mapred.reduce.tasks.speculative.execution
+			hive.mapred.reduce.tasks.speculative.execution
+		
+		set mapred.reduce.tasks=10;直接设置
+			hive.exec.reducers.max默认999
+			hive.exec.reducers.bytes.per.reducer 默认1G
+		计算公式:
+			numRTasks=min[maxReducers,input.size/perReducer]
+			maxReducers=hive.exec.reducers.max
+			perReducers=hive.exec.reducers.bytes.per.reducer
+
+
+
+
+
+
+
+
+
+
+
+				
+		

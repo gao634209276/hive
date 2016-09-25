@@ -1,0 +1,97 @@
+窗口函数:
+### first_value(),last_value()
+select id,money,first_value(money) 
+over (partition by id order by money) from winfunc;
+101	100.0	100.0
+101	130.0	100.0
+102	100.0	100.0
+102	200.0	100.0
+102	300.0	100.0
+103	60.0	60.0
+103	150.0	60.0
+103	400.0	60.0
+
+select id,money,first_value(money) 
+over (partition by id order by money 
+rows between 1 preceding and 1 following) 
+from winfunc;
+	rows划分范围,1 preceding前一行,1 following后一行,
+	整个查询意思是:按照id进行partition,在每个partition中以money进行order,
+	排序以后,按区间计算money的first_value()也就最小值,
+	也就是在该分区中,计算此行最小的money是通过比较本行,1 preceding和1 following三行,取最小的值
+101	100.0	100.0
+101	130.0	100.0
+102	100.0	100.0
+102	200.0	100.0
+102	300.0	200.0
+103	60.0	60.0
+103	150.0	60.0
+103	400.0	150.0
+
+###lead
+select id,money,lead(money,2) over (order by money) from winfunc;
+	lead是取出当前行money字段之后到第n行的区间最大值,这里先经过order by,
+	(order by是全局排序,所以不同hash值的记录间也要比较,没有partation by),也就是比较较大值.
+	与lead相反的取值是lag(col,n)函数
+103	60.0	100.0
+102	100.0	130.0
+101	100.0	150.0
+101	130.0	200.0
+103	150.0	300.0
+102	200.0	400.0
+102	300.0	NULL
+103	400.0	NULL
+### rank()over (partition by order by ) 排序
+先通过id分区,在每个分区内按照money大小进行(默认升序)排序
+如果2个值相同则排序序号相同,而下一个值的序号会+2,即间断性
+select id,money,rank() over(partition by id order by money) from winfunc;
+101	100.0	1
+101	120.0	2
+101 120.0	2
+101 130.0	4
+102	200.0	2
+102	300.0	3
+
+### dense_rank()over (partition by order by )
+此排序会将money值相同的视为同一序号,不间断排序
+select id,money,dense_rank() over(partition by id order by money) from winfunc;
+
+### cume_dist() over (partition by order by )
+((相同值最大行号,从1开始)/(行数)) * 每个值的个数,与前面的累加
+可用于将比例值作为x,将money作为y,形成比例分布图
+select id,money,cume_dist() over(partition by id order by money) from winfunc;
+101	100.0	0.5		// (相同值100最大行号1/该分区行数2)=1/2=0.5
+101	130.0	1.0
+102	100.0	0.3333333333333333
+102	200.0	0.6666666666666666
+102	300.0	1.0
+103	60.0	0.3333333333333333
+103	150.0	0.6666666666666666
+103	400.0	1.0
+
+### percent_rank() over (partition by id order by money)
+((相同值最小行号-1)/(行数-1))
+select id,money, percent_rank() over (partition by id order by money)from winfunc;
+101	100.0	0.0
+101	130.0	1.0
+102	100.0	0.0
+102	200.0	0.5
+102	300.0	1.0
+103	60.0	0.0
+103	150.0	0.5
+103	400.0	1.0
+
+### ntile(2) over (order by money desc nulls last): 分片
+按照分区/或者所有数据 进行分片(2)为分两片,
+select id,money,ntile(2) over (order by money desc )from winfunc;
+103	400.0	1
+102	300.0	1
+102	200.0	1
+103	150.0	1
+101	130.0	2
+102	100.0	2
+101	100.0	2
+103	60.0	2
+
+
+

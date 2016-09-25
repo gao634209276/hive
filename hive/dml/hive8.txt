@@ -1,0 +1,77 @@
+Hive数据导出
+------------------------------------
+	导出方式
+		hadoop命令方式:get/text
+			如:hadoop fs -get /data/testext/* newdata
+			 hadoop fs -text /data/testext/* > newdata2
+			 其中text会讲hdfs中不同格式文件(解压/解码)等
+		通过insert ... directory方式
+			insert overwrite [local] directory '/tmp/dir'
+			[row format delimited fields terminated by '\t']//本地目录支持,hdfs上不支持
+			select name,salary,address from employees
+		Shell命令加管道:hive -f/e | sed/grep/awk > file
+		第三方工具 sqoop
+演示:
+--------------------
+hadoop fs -get /data/* /home/hadoop/test/out
+hadoop fs -text /data/* > /home/hadoop/test/text.out
+
+insert overwrite local directory '/home/hadoop/test/ext/'
+row format delimited fields terminated by '\t'
+select name,addr from testext;
+如果不使用row format写入到本地,分隔符为不识别的asci码.
+insert overwrite directory '/test/testext/'
+select name,addr from testext;
+在hdfs上不能使用row format分割.
+hive -S -e "select * from testext" | grep test1
+
+
+Hive动态分区
+	不需要为不同的分区添加不同的插入语句
+	分区不明确,需要从数据中能够获取
+	需要设置几个参数:
+		set hive.exec.dynamic.partition=true;	//使用动态分区
+		set hive.exec.dynamic.partition.mode=nonstrict;	//无限制模式
+		//如果模式是strict,则必须有一个静态分区,且放在最前面
+		set hive.exec.max.dynamic.partitions.pernode=10000;	//每个节点生成动态分区的最大个数
+		set hive.exec.max.dynamic.partitions=100000;	//生成动态分区的最大个数
+		set hive.exec.max.created.files=150000;	//一个任务最多可以创建的文件数目
+		set dfs.datanode.max.xcievers=8192;	//限定一次最多打开的文件数
+		注意:每天产生的动态分区不要太多,一年下来,mysql吃不消
+
+练习:
+创建有一个分区的分区表
+drop table d_part;
+create table d_part(name string)
+partitioned by (value string)
+row format delimited fields terminated by '\t' lines terminated by '\n';
+以addr作为value通过select insert进行动态分区
+insert into table d_part partition(value)
+select name ,addr as value from testext;
+show partitions d_part;
+两个分区
+drop table d_part2;
+create table d_part2(name string)
+partitioned by (value string,dt string)
+row format delimited fields terminated by '\t';
+
+insert into table d_part2 partition(value,dt)
+select 'test' as name ,addr as value, name as dt from testext;
+hive> show partitions d_part2;
+
+设置为约束型:
+将hive.exec.dynamic.partition.mode改过来,在测试
+set hive.exec.dynamic.partition.mode=strict;	
+drop table d_part3;
+create table d_part3(name string)
+partitioned by (value string,dt string)
+row format delimited fields terminated by '\t';
+insert into table d_part3 partition(value,dt)
+select 'test' as name ,addr as value, name as dt from testext;
+将会报错如此下:
+FAILED: SemanticException [Error 10096]: Dynamic partition strict mode requires at least one static partition column. To turn this off set hive.exec.dynamic.partition.mode=nonstrict
+这时候需要如下插入操作:(value必须设置为静态的分区)
+insert into table d_part3 partition(value='static',dt)
+select 'test' as name , name as dt from testext;
+
+

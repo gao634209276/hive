@@ -1,0 +1,151 @@
+
+日志分析系统-流程
+数据收集->数据清洗->数据存储与管理->数据分析->数据显示(web ui)
+
+日志分析系统
+flume日志收集工具-->HDFS分布式文件系统-->MapReduce分布式计算框架
+-->HBase分布式实时数据库/Hive数据仓库/Pig数据流处理
+-->Mahout数据挖掘-->Sqoop数据ETL工具
+Zookeeper分布式协调服务
+
+1 Hive
+	hive可以讲结构化的数据文件映射为一张数据库表,并提供类sql(HQL)的查询功能 
+	hive构建在hadoop之上的数据仓库,数据计算使用MR,数据存储使用HDFS
+	hive可将sql语句转换为MapReduce任务进行运行(可认为是一个HQL/MR的语言翻译器)
+	通常用于进行离线数据处理(采用MapReduce);
+	可以用来进行数据提取转化加载:ETL(Extracition-Transformation-Loading)工具
+
+1.1 Hive常见应用场景
+	日志分析
+		统计网站一个时间段内的pv,uv
+		多维度数据分析
+		大部分互联网公司使用Hive进行日志分析,包括百度,淘宝等
+	其他场景
+		海量结构化数据离线分析
+		低成本进行数据分析(不直接编写MR)
+hive优缺点
+	优点
+		成本低入手快
+		提供了类SQL查询语言HQL,快速实现简单mr统计,不必开发专门的mr应用
+		为超大数据集设计的计算/扩展能力:MR作为计算引擎,HDFS最为存储系统
+		统一的数据管理:可与pig,Presto等共享
+	缺点:
+		不支持实时查询
+		Hive的HQL表达能力有限:
+			迭代算法无法表达(比如pagerank)
+			有些复杂运算用HQL不易表达
+		Hive效率较低
+			Hive自动生成MapReduce作业,通常不够智能
+		HQL调优困难,粒度较粗
+		可控性差
+
+Hive架构:
+	用户接口:odbc,jdbc,command line,WebUI,(客户端组件),thrift Server,
+	Driver(驱动)[Compiler(查询编译器),Optimizer,Executor(执行引擎)]
+	Hive+MetaStore(元数据存储)
+	Map/Reduce
+	HDFS/HBase
+	
+hive体系结构:
+	用户接口(CLI,JDBC/ODBC,WebUI)
+	元数据存储(metastore):默认存储在自带的数据库derby(嵌入式的)中,线上是有时一般换为mysql
+		Derby:单session
+			启动终端目录创建元数据文件
+			不能多用户共享
+	驱动器(Driver):解释器,编译器,优化器,执行器
+	服务器,客户端组件,可扩展接口(udf,udaf)
+	Hadoop(用MapReduce进行计算,用HDFS记性存储)
+安装前提:jdk,hadoop,mysql(安装省略)
+hive的安装
+  (1)解压缩、重命名、设置环境变量
+  (2)在目录$HIVE_HOME/conf/下，执行命令mv hive-default.xml.template  hive-site.xml重命名
+     在目录$HIVE_HOME/conf/下，执行命令mv hive-env.sh.template  hive-env.sh重命名
+  (3)修改hadoop的配置文件hadoop-env.sh，修改内容如下：
+     export HADOOP_CLASSPATH=.:$CLASSPATH:$HADOOP_CLASSPATH:$HADOOP_HOME/bin
+  (4)在目录$HIVE_HOME/bin下面，修改文件hive-config.sh，增加以下内容：
+     export JAVA_HOME=/usr/local/jdk
+     export HIVE_HOME=/usr/local/hive
+     export HADOOP_HOME=/usr/local/hadoop
+3.安装mysql
+	使用mysql作为hive的metastore
+	把mysql的jdbc驱动放置到hive的lib目录下
+	修改hive-site.xml文件:
+		<!--URL-->
+		<property>
+			<name>javax.jdo.option.ConnectionURL</name>
+			<value>jdbc:mysql://hadoop0:3306/hive?createDatabaseIfNotExist=true</value>
+		</property>
+		<!--Driver-->
+		<property>
+			<name>javax.jdo.option.ConnectionDriverName</name>
+			<value>com.mysql.jdbc.Driver</value>
+		</property>
+		<!--Username /password-->
+		<property>
+			<name>javax.jdo.option.ConnectionUserName</name>
+			<value>root</value>
+		</property>
+		<property>
+			<name>javax.jdo.option.ConnectionPassword</name>
+			<value>admin</value>
+		</property>
+	
+hive启动文件加载过程:hive-env,hive-default,hive-site
+hiveClient访问方式:
+	Cli:hive交互式hql:select ...
+	HWI:hive --service hwi
+		http://hadoop:9999/hwi/
+		Create Session-->
+	HiveServer
+		hive --service hiveserver
+	Hive-JDBC
+		hive --service hiveserver2
+		See:JDBCHive.java
+技巧:
+	set hive.cli.print.current.db=true;//提示符显示当前库名
+	set hive.cli.print.header=true;//结果显示查询表字段
+
+
+附:
+Pig、HBase、Hive 比较关系
+Pig
+	Pig是一种数据流语言，用来快速轻松的处理巨大的数据。
+	Pig包含两个部分：Pig Interface,Pig Latin。
+	Pig可以非常方便的处理HDFS和HBase的数据，
+	和Hive一样,Pig可以非常高效的处理其需要做的，通过直接操作Pig查询可以节省大量的劳动和时间。
+当你想在你的数据上做一些转换，并且不想编写MapReduce jobs就可以用Pig.
+
+Hive
+
+	起源于FaceBook,Hive在Hadoop中扮演数据仓库的角色。
+	建立在Hadoop集群的最顶层，对存储在Hadoop群上的数据提供类SQL的接口进行操作。
+	你可以用 HiveQL进行select,join,等等操作。
+如果你有数据仓库的需求并且你擅长写SQL并且不想写MapReduce jobs就可以用Hive代替。
+
+HBase
+	HBase作为面向列的数据库运行在HDFS之上，HDFS缺乏随即读写操作，HBase正是为此而出现。
+	HBase以Google BigTable为蓝本，以键值对的形式存储。
+	项目的目标就是快速在主机内数十亿行数据中定位所需的数据并访问它。
+	HBase是一个数据库，一个NoSql的数据库，
+	像其他数据库一样提供随即读写功能，Hadoop不能满足实时需要，HBase正可以满足。
+	如果你需要实时访问一些数据，就把它存入HBase。
+	你可以用Hadoop作为静态数据仓库，HBase作为数据存储，放那些进行一些操作会改变的数据。
+
+Pig VS Hive
+	Hive更适合于数据仓库的任务，Hive主要用于静态的结构以及需要经常分析的工作。
+		Hive与SQL相似促使 其成为Hadoop与其他BI工具结合的理想交集。
+	Pig赋予开发人员在大数据集领域更多的灵活性，并允许开发简洁的脚本用于转换数据流以便嵌入到较大的 应用程序。
+	Pig相比Hive相对轻量，它主要的优势是相比于直接使用Hadoop Java APIs可大幅削减代码量。
+		正因为如此，Pig仍然是吸引大量的软件开发人员。
+	Hive和Pig都可以与HBase组合使用，Hive和Pig还为HBase提供了高层语言支持，使得在HBase上进行数据统计处理变的非常简单
+
+Hive VS HBase
+	Hive是建立在Hadoop之上为了减少MapReduce jobs编写工作的批处理系统，
+	HBase是为了支持弥补Hadoop对实时操作的缺陷的项目 。
+	想象你在操作RMDB数据库，如果是全表扫描，就用Hive+Hadoop, 如果是索引访问，就用HBase+Hadoop 。
+	Hive query就是MapReduce jobs可以从5分钟到数小时不止，HBase是非常高效的，肯定比Hive高效的多。
+
+
+
+
+

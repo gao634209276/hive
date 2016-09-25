@@ -1,0 +1,57 @@
+Hive分区表
+-----------------------------
+	分区:在hive Select查询中一般会扫描整个表内容,会消耗到很多时间做没必要工作,
+	分区表指的是在创建表是指定partition 的分区空间
+分区语法
+drop table if exists employees;
+create table if not exists employees (
+name string, salary float,
+subordinates array<string>,
+deductions map<string,float>,
+address struct<street:string, city:string, state:string, zip:int>)
+partitioned by (dt string,type string)
+row format delimited fields terminated by '\t' 
+collection items terminated by ','
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile;
+
+desc formatted employees;
+
+Hive分区表操作
+----------------------
+增加分区
+alter table employees
+add if not exists partition(dt = '20160101',type = 'test');
+alter table employees
+add if not exists partition(dt = '20160102',type = 'test');
+删除分区
+alter table employees
+drop if exists partition (dt = '20160102',type = 'test');
+查看分区
+show partitions employees;
+
+
+Hive分桶
+--------------------------------
+	对于每一个表(table)或者分区,Hive可以进一步组织成桶,
+		也就是说桶是更为细粒度的数据范围划分
+	Hive是针对某一列进行分桶
+	采用对列值哈希,然后除以分桶的个数求余的方式决定该条记录存放在哪个桶当中
+	好处:
+		获得更高的查询处理效率,
+		使取样(sampling)更高效
+分桶设置:
+Set hive.enforce.bucketing=true;
+	如果不设置,加载数据后,分桶无效,数据仍然存在一个文件中
+分桶操作:
+drop table if exists bucketed_user;
+create table if not exists bucketed_user(
+id string, name string)
+clustered by(id) sorted by(name) into 4 buckets
+row format delimited fields terminated by '\t' stored as textfile;
+insert overwrite table bucketed_user select name,addr from testext;
+	
+	按id分区,按name排序,放入4个桶
+	插入数据后,会在分区目录下生成是个文件
+

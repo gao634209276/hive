@@ -1,0 +1,78 @@
+hive优化,权限
+	高效hive的sql
+
+	hive优化目标
+		在优先的资源下,高效执行
+	常见问题
+		数据倾斜
+		map设置
+		reduce设置
+		其他
+
+hive执行优化
+	HQL-->Job-->Map/Reduce
+	执行计划:
+		查看执行计划:explain [extended] hql
+		如:select col,count(1) from test group by col;
+		explain select col,count(1) from test group by col;
+	语法树:
+	例:
+	ABSTRACT SYNTAX TREE:
+		TOK_QUERY
+		   TOK_FROM
+		      TOK_TABREF
+		         TOK_TABNAME
+		            testext
+		   TOK_INSERT
+		      TOK_DESTINATION
+		         TOK_DIR
+		            TOK_TMP_FILE
+		      TOK_SELECT
+		         TOK_SELEXPR
+		            TOK_TABLE_OR_COL
+		               name
+		         TOK_SELEXPR
+		            TOK_FUNCTION
+		               count
+		               TOK_TABLE_OR_COL
+		                  addr
+		      TOK_GROUPBY
+		         TOK_TABLE_OR_COL
+		            name
+	hive执行过程:
+		CLi.query客户端查询
+		-->Driver.getPlan:驱动类分析,获取执行计划
+		-->Compile.get,编译器获得执行计划生成语法分析树,从元数据中获取相关信息
+		-->metastore.send,元数据返回信息给编译器
+		-->Compile.sendPlen,编译器生成执行计划
+		-->Driver.execPlan,驱动根据执行计划,调用执行器执行计划
+		-->execute.sendJob,顺序的执行,后面的job等到前面的job执行完成
+		如果没有依赖关系,可以优化并发
+		-->{
+		//JobTracker-->Map/Reduce-->DataNode-->HDFS-->NameNode
+		ResourceManager
+		}JobTracker.jobDone+NameNode.dfsOp
+		-->execute.sedRes-->Driver
+		其他参考:
+		http://www.tuicool.com/articles/6fAFNn2
+
+hive表优化
+	分区
+		静态分区
+		动态分区
+			set hive.exec.dynamic.partition=true
+			set hive.exec.dynamic.partition.mode=nonstrict;
+			strict模式下必须指定一个静态分区
+			hive.exec.max.dynamic.partitions=1000
+			hive.exec.max.dynamic.partitions.pernode=100
+				在每一个mapper/reducer节点允许创建的最大分区数
+			DATANODE设置：
+				dfs.datanode.max.xceivers=8192：允许DATANODE打开多少个文件
+		分桶
+			set hive.enforce.bucketing=true;
+			set hive.enforce.sortiong=true;
+		数据:
+			相同数据尽量聚集在一起
+
+
+

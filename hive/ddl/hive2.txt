@@ -1,0 +1,141 @@
+hive基本使用-数据类型
+基本类型Primitive
+		tinyint 1bit/smallint 2bit/int 4bit/bigint 8bit
+		boolean;double/float;string;
+		binary(v0.8.0+);timestamp(v0.8.0+)
+		decimal,char,varchar,date
+	集合类型:
+		Array:一系列相同数据类型元素,通过下表访问arr[1]
+		Map:kv对,通过key访问元素:['key']
+		Struct:包含不同数据类型元素,通过"点语法"获得:struct.key1
+
+hive基本使用-文件	
+	文件格式:
+		1.textfile
+			textfile为默认格式
+			存储方式：行存储
+			磁盘开销大 数据解析开销大
+			压缩的text文件 hive无法进行合并和拆分
+		2.sequencefile
+			二进制文件,以<key,value>的形式序列化到文件中
+			存储方式：行存储
+			可分割 压缩
+			一般选择block压缩
+			优势是文件和Hadoop api中的mapfile是相互兼容的。
+		3.rcfile
+			存储方式：数据按行分块;每块按照列存储
+				如:1-100行作为一个RCFile的Row Group对应hdfs的一个Block
+				然后RowGroup存储是将hive表的列转换为行存储
+				每个RowGroup包含16byte的sync,MetadataHeader头和数据内容
+			压缩快 快速列存取(查询效率高)
+			读记录尽量涉及到的block最少
+			读取需要的列只需要读取每个row group的头部定义。
+			读取全量数据的操作 性能可能比sequencefile没有明显的优势
+		4.orc
+			存储方式：数据按行分块 每块按照列存储
+			压缩快 快速列存取
+			效率比rcfile高,是rcfile的改良版本
+	总结：
+	textfile 存储空间消耗比较大，并且压缩的text 无法分割和合并 查询的效率最低,可以直接存储，加载数据的速度最高
+	sequencefile 存储空间消耗最大,压缩的文件可以分割和合并 查询效率高，需要通过text文件转化来加载
+	rcfile 存储空间最小，查询的效率最高 ，需要通过text文件转化来加载，加载的速度最低
+	个人建议：text,seqfile能不用就尽量不要用  最好是选择orc			
+	
+	扩展接口:
+		默认文件读取方式
+		自定义inputformart
+		自定义serde
+
+Hive基本使用-表
+
+	create [external] table [if not exists] [db_name.]talbe_name//表
+	[(col_name data_type[COMMENT col_comment],...]//列,字段
+	[partitioned by (col_name data_type [comment col_comment],..)]//分区
+	[clustered by (col_name,col_name,...) //按字段汇总到一个reduce
+	[sorted by (col_name [asc|desc],...)] into num_buckets BUCKETS]//默认hash分桶
+	[
+	[ROW FORMAT row_format]//行格式
+	[fields terminated by '']//字段分隔符
+	[lines terminated by '']//行分隔符
+	[STORED AS file_format]//存储格式
+	| STORED BY 'storage.handler.class.name' [WITH SERDEPROPERTIES(...)]//自定义一个serde格式读取
+	(...)]
+	]
+	[location hdfs_path]//定义表位置
+	[tblproperties (property_name=property_value,...)]//表属性
+	[as select_statement]//从select结果创建
+	
+hive基本使用-表例
+-------------------------------------------------------
+drop table testtable;
+create table if not exists testtable(
+name string comment 'name value',
+addr string comment 'addr value')
+row format delimited 
+fields terminated by '\t' 
+lines terminated by '\n' 
+stored as textfile;
+show tables;
+show create table testtable;//表创建信息
+describe extended testtable;//表扩展信息
+describe formatted testtable;//同上,但是显示规整
+
+数据加载
+----------------
+testtable
+table1	test1
+table2	test2
+
+load data local inpath'/home/hadoop/test/hive/test/testtable' overwrite into table testtable;
+load data local inpath'/home/hadoop/test/hive/test/testtable' into table testtable;
+select * from testtable;
+
+外部表
+------------------
+drop table if exists testext;
+create table if not exists testext(
+name string comment 'name value',
+addr string comment 'addr value')
+row format delimited fields terminated by '\t' lines terminated by '\n' stored as textfile
+location '/data/testext';
+load data local inpath'/home/hadoop/test/hive/test/testext' overwrite into table testext;
+
+指定的位置免于hdfs上文件传输和复制,这是外部表的优势
+drop table if exists employees;
+create external table if not exists employees (
+name string comment 'name value',
+salary float,
+subordinates array<string>,
+deductions map<string,float>,
+address struct<street:string, city:string, state:string, zip:int> comment 'addr value')
+row format delimited fields terminated by '\t' 
+collection items terminated by ','
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile
+location '/data/employees';
+describe formatted employees;
+
+数据内容:employees
+wang	123	a1,a2,a3	k1:1,k2:2,k3:3	s1,s2,s3,4
+liu	456	a4,a5,a6	k4:4,k5:5,k6:6	s4,s5,s6,6
+zhang	789	a7,a8,a9	k7:7,k8:8,k9:9	s7,s8,s9,9
+
+load data local inpath'/home/hadoop/test/hive/test/employees' overwrite into table employees;
+
+select * from employees;
+查询subordinates字段数组索引为1的元素值
+select subordinates[1] from employees;
+查询deductions字段map中k为k2的值
+select deductions["k2"] from employees;
+查询address字段的city值
+select address.city from employees;
+删除外部表:
+drop table if exists employees;
+删除后hdfs中数据依然存在,这是外部表的优势
+
+
+
+
+
+

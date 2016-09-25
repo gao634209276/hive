@@ -1,0 +1,131 @@
+正则表达式
+函数分类
+	内置函数
+		简单函数-map阶段
+		聚合函数-reduce阶段
+		集合函数-map阶段
+		特殊函数
+	自定义函数
+		UDF-map阶段
+		UDAF-reduce阶段
+cli命令
+	显示当前回话有多少个函数可用
+		show functions;
+	显示函数的描述信息
+		desc function concat; //显示concat函数描述
+	显示函数的扩展描述信息
+		desc function extended concat;
+简单函数
+----------------
+	函数的计算粒度-单条记录
+	关系运算
+	数学运算
+	逻辑运算
+	数值运算
+	类型运算
+	日期运算
+	条件运算
+	字符串运算
+	统计函数
+
+集合函数
+------------------
+	复合类型构建
+	复杂类型访问
+	复杂类型长度
+	
+特殊函数
+----------------
+	窗口函数
+		应用场景
+			用于分区排序
+			动态group by
+			Top N
+			累计计算
+			层次查询
+		Windowing functions
+			lead,lag,first_value,last_value	
+	分析函数
+		The OVER clause(over子句)
+			count,sum,min,max,avg
+		Analytics funcitons
+			rank,row_number,dense_rank,cume_dist,percent_rank,ntile
+	混合函数
+		//使用java的一些类和函数作为hive的方法和函数
+		java_method(class,method[,arg1[,arg2..]])
+		reflect(class,method[,arg1[,arg2..]])	//反射获取java提供方法
+		hash(a1[,a2..])	//根据参数hash计算
+
+UDTF(用户user定义def表table函数function)
+----------------------
+	表函数
+		lateralView:lateral view udtf(expression) tableAlias 
+		as columnAlias(',' columnAlias)*fromClause: 
+		from baseTable(lateralView)*
+		例 explode函数 //可以讲map一行转换为多行
+
+函数使用练习
+===========================================================
+员工id,工资,表示
+create table winfunc(
+id int, money double,type string)
+row format delimited fields terminated by '\t';
+101	100	ABC
+101	130	BCD
+102	100	CDE
+102	200	ABC
+102	300	ABD
+103	400	ABE
+103	150	CDE
+103	60	BCE
+load data local inpath'/home/hadoop/test/data' overwrite into table winfunc;
+
+
+### and ar 优先级
+要求:显示101和102中工资为100的记录
+select id,money from winfunc where id="101" or id="102" and money = "100";
+101	100.0
+101	130.0
+102	100.0
+原因是and优先级高于or,查询语句先执行and,然后or,保证顺序加()
+select id,money from winfunc where (id="101" or id="102") and money = "100";
+
+### case类型转换
+cast(money as bigint)
+select cast (1.5 as int) from winfunc;
+select if (2>1,id,money) from winfunc;
+
+### case when
+case when .. then ..when .. then .. else .. end
+如:
+select case when id='101' then 'V1' 
+when id='102' then 'V2' 
+else 'V3'
+end from winfunc;
+
+
+###实际工作中数据转换为json格式,
+get_json_object
+	()内为第一个单数为json的值,可能是表中的值,
+	第二个是路径,$.表示根,name为属性名,这里name的属性值jack.
+	用于数据清洗过程,正则表达式,判断是否为json格式,不是过滤掉
+select get_json_object('{"name":"jack","age":"20"}','$.name') from winfunc limit 1;
+//get_json_object()第一个参数必须满足json格式才可以,如果不是可能要过滤掉
+
+###解析url
+select parse_url('http://fanyi.baidu.com/?aldtype=85#en/zh/hello','HOST') from winfunc limit 1;
+
+###字符串连接函数concat
+concat(string A,string B...)返回值:String
+select concat(type,'123') from winfunc limit 1;
+select concat_ws('-',type,'123') from winfunc limit 1;
+select concat_ws('-',split(type,'')) from winfunc limit 1;//split()返回值array
+
+
+### collect收集字符串/字段放在一起
+collect_set()/collect_list()//返回值为array
+select collect_set(id) from winfunc; //set有去重作用
+select collect_list(id) from winfunc;
+
+### sum/count聚合
+select sum(money),count(*) from winfunc;

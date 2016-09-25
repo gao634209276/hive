@@ -1,0 +1,103 @@
+
+表属性操作
+	修改表名称
+		alter table table_name remane to new_table_name;
+	修改列名
+		alter table tb change column c1 c2 int comment 'xxx' after severity;
+		//可以把该列放到指定列的后面,或者使用'first'放到第一位
+	增加列
+		alter talbe tb add columns (c1 string comment 'xxx',c2 long comment 'yyy')
+
+
+实例
+--------------------------
+drop table if exists testc;
+create table testchange(name string ,value string);
+alter table testchange rename to testc;
+alter table testc add columns(type string,col int comment 'xxx');
+alter table testc change column type type string after name;
+alter table testc change column type type string first;
+alter table testc change column type col2 int;
+
+修改表属性tblproperties
+alter table testc set tblproperties('comment'='xxxxx');
+desc formatted testc;
+针对无分去表与有分区表不同
+alter table table_name set serdeproperties('field.delim'='\t');
+实例:
+drop table if exists city;
+create table city(
+time string,country string,province string,city string)
+row format delimited fields terminated by '#'
+lines terminated by '\n' stored as textfile;
+/home/hadoop/test/city (数据格式)
+201608241212	中国	北京	北京
+201608241213	中国	河南	洛阳
+201608241214	中国	湖北	武汉
+load data local inpath'/home/hadoop/test/hive/test/city' overwrite into table city;
+select * from city;
+201608241212	中国	北京	北京	NULL	NULL	NULL
+201608241213	中国	河南	洛阳	NULL	NULL	NULL
+201608241214	中国	湖北	武汉	NULL	NULL	NULL
+#这是因为建表的格式以#为分隔符,文本中没有#,所以整行作为第一个字段内容,其他为null
+desc formatted city;
+Storage Desc Params:	 	 
+	field.delim         	#                   
+	line.delim          	\n                  
+	serialization.format	# 
+alter table city set serdeproperties('field.delim'='\t');
+然后在select * from city;	内容就没有null
+
+
+而对于分区表:
+drop table if exists city;
+create table city(
+time string,country string,province string,city string)
+partitioned by (dt string)
+row format delimited fields terminated by '#'
+lines terminated by '\n' stored as textfile;
+load data local inpath'/home/hadoop/test/hvie/test/city' into table city partition(dt='20160601');
+select * from city;
+显示结果如下,原因同上,以上面的方式更改就不能生效
+alter table city set serdeproperties('field.delim'='\t');
+201608241212	中国	北京	北京	NULL	NULL	NULL	20160601
+201608241213	中国	河南	洛阳	NULL	NULL	NULL	20160601
+201608241214	中国	湖北	武汉	NULL	NULL	NULL	20160601
+还需要添加分区进行更改
+alter table city partition(dt='20160601') set serdeproperties('field.delim'='\t');
+但是此时如果再设置一个新的分区,分隔符依然还是#
+load data local inpath'/home/hadoop/test/city' into table city partition(dt='20160602');
+select * from city where dt='20160602';
+这时候还需更改的全局的serdeproperties,同无分区表的操作相同
+alter table city set serdeproperties('field.delim'='\t');
+(对分区表来说,此更改对新增的所有分区有效,之前的需要指定分区更改)
+
+修改location
+alter table table_name [partition()] set location 'path'
+alter table table_name set tblproperties('external'='true');//内部表转外部表
+alter table table_name set tblproperties('external'='false');//外部表转内部表
+
+demo:
+drop table if exists city;
+create table city(
+time string,country string,province string,city string)
+row format delimited fields terminated by '\t'
+lines terminated by '\n' stored as textfile;
+alter table city set location 'hdfs://hadoop:9000/data/city';
+select * from city;
+drop table city;
+这时候由于city是内部表,删除的时候,会把hdfs的文件一并删除,实际工作中需要注意
+修改分区表分区路径:alter table xx partition(xx=xx) set location 'xxxx';
+
+内部表转外部表
+alter table city set tblproperties('external'='true');
+desc formatted city;
+多用于:有一个内部表,含有很多记录,需要对字段修改很麻烦,这时候可以转化为外部表,删除,然后重新建表,指定位置
+
+其他表属性操作:
+alter table/partition file format
+alter table storage properties
+alter table rename partition
+alter table set location
+等等可以在hive.apache.org中wiki搜索Langugage DDL
+https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DML

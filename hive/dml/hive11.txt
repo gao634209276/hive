@@ -1,0 +1,111 @@
+Distribute by和sort by
+Distribute分散数据
+	distribute by col
+	按照col列把数据分散到不同的reduce
+sort排序
+	sort by col2
+	按照col列把数据排序
+
+	select col1,col2 from M
+	distribute by col1 sort by col1 asc,col2 desc
+	两者结合出现,确保每个reduce的输出都是有序的
+	(但reduce各个输出之间不一定有序,sort by仅仅是对单个reduce输出排序,
+	如果用order by就会全局排序)
+
+对比
+------------
+distribute by 和group by
+	都是按照key值划分数据
+	都使用reduce操作
+	唯一不同,distribute by只是单纯的分散数据,
+	而group by把相同key的数据聚集到一起,后续必须是聚合操作
+
+order by 和 sort by
+	order by 是全局排序
+	sort by 是确保每个reduce上面输出的数据有序,
+	如果只有一个reduce时,和order by作用一样
+
+mapreduce执行流程
+---------------
+	map端从表中读取数据,执行where条件,设置reduce数为3,
+	以distrubute by列的值作为key,其他列作为value,
+	然后把数据根据key值(hash分区)和reduce个数将数据分为n个分区传到不同的reduce,
+	在reduce端不会对不同map相同k的k-v对进行聚合,
+	(如果是group by则会根据hive具体聚合条件进行聚合),
+	然后按照sort by字段进行排序
+
+dristribute by应用场景
+----------------
+	map输出的文件大小不均
+	reduce输出的文件大小不均
+	小文件过大
+	文件超大
+用于由于某些操作导致表中某一列,或很多列数据分布不均匀,
+s这时候可以根据分布比较均匀的字段,通过distribute by操作打散不均匀的字段数据
+
+clustre by
+-----------------------
+把有相同值的数据聚集到一起,并排序
+效果
+	cluster by col
+	distribute by col order by col
+
+实例演示使用
+----------------
+hive> desc http;
+OK
+ip                  	string              	                    
+data                	string              	                    
+action              	string              	                    
+addr                	string              	                    
+type                	string              	                    
+statu               	int                 	                    
+down                	int                 	                    
+Time taken: 0.269 seconds, Fetched: 7 row(s)
+hive> desc ipinfo;
+OK
+ip                  	string              	                    
+data                	string              	                    
+down                	int  
+set mapred.reduce.tasks=5;
+insert overwrite table ipinfo select ip,data,down from http distribute by ip ;
+然后在产看切分的大小
+hive> dfs -ls /user/hive/warehouse/ipinfo;
+Found 5 items
+-rwxr-xr-x   1 hadoop supergroup    3524541 2016-06-05 16:36 /user/hive/warehouse/ipinfo/000000_0
+-rwxr-xr-x   1 hadoop supergroup    4921872 2016-06-05 16:36 /user/hive/warehouse/ipinfo/000001_0
+-rwxr-xr-x   1 hadoop supergroup    5570459 2016-06-05 16:36 /user/hive/warehouse/ipinfo/000002_0
+-rwxr-xr-x   1 hadoop supergroup    4100545 2016-06-05 16:36 /user/hive/warehouse/ipinfo/000003_0
+-rwxr-xr-x   1 hadoop supergroup    4603385 2016-06-05 16:36 /user/hive/warehouse/ipinfo/000004_0
+可以讲city表的四个小文件合并为一个大文件到其他表
+set mapred.reduce.tasks=1;
+insert overwrite table ipinfo select ip,data,down from ipinfo distribute by data;
+然后发现小文件被合并了
+hive> dfs -ls /user/hive/warehouse/ipinfo;
+Found 1 items
+-rwxr-xr-x   1 hadoop supergroup   22720802 2016-06-05 16:44 /user/hive/warehouse/ipinfo/000000_0
+
+Union all
+--------------------------
+多个表的数据合并成一个表,hive部支持union
+select col from (
+select a as col from t1 union all select b as col from t2) tmp
+Mapreduce执行流程
+---------------
+map端从表读取数据,执行where条件,reduce端从两个表读取数据,合并到一个表中
+要求
+	字段名字一样
+	字段类型一样
+	字段个数一样
+	子表不能有别名
+	如果需要从合并之后的表中查询数据,那么合并的表必须要有别名
+演示
+---------------
+hive> desc m;
+OK
+col1                	string              	                    
+col2                	int 
+create table n like m;
+select * from (
+select col1,col2 from m union all select col1,col2 from n) tmp
+当然如果本表字段名称不一样,可以用as更改为统一名称

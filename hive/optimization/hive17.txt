@@ -1,0 +1,68 @@
+hive SQL优化
+
+主要为hive操作优化
+	join优化
+		hive.optimize.skewjoin=true;
+			如果是join过程出现倾斜,应该设为true
+		set hive.skewjoin.key=100000;这个是join的键对应的记录条数
+			超过这个值则会进行优化,以此作为判断
+		开启优化措施后,执行过程:
+			比原本job个数多启动1个job,
+			该job会在map阶段讲数据的kv对加上一个随机数,形成如1-k,v;2-k,v;..格式,
+			然后根据该随机数作为partition将kv打乱,随机分配到不同节点进行reduce聚合计算
+				这样处理的结果是相同的GroupBy Key有可能被分发到不同的Reduce中，
+				从而达到负载均衡的目的;
+			第二个MRJob再根据预处理的数据结果按照GroupBy Key分布到Reduce中
+				这个过程可以保证相同的GroupBy Key被分布到同一个Reduce中;
+			最后完成最终的聚合操作。
+		mapjoin
+			set hive.auto.convert.join=true;
+			hive.mapjoin.smalltable.filesize默认值是25mb
+			select /*+mapjoin(A)*/ f.a,f.b from A t join B on (f.a=t.b)
+			简单总结mapjoin的使用场景:
+				1.关联操作中有一张表非常小
+				2.不等值的链接操作
+			注意:mapjoin不能做不等值判断
+		bucket join
+			两个表相同方式划分桶
+			两个表桶个数是倍数关系
+			create table order(cid int,price float) clustered by(cid) into 32 buckets;
+			create table customer(id int,first string) clustered by (id) into 32 buckets;
+			select price from order t join customer s on t.cid = s.id; 
+	
+	where条件放在join之前执行,如:
+		select m.cid,u.id from order m join customer u on m.cid = u.id where m.dt='2016-06-1';
+		select m.cid,u.id from (select cid from order where dt='2016-06-01') m join custmer u on m.cid=u.id;
+	
+	group by 优化
+		hive.groupby.skewindata=true;
+			如果是group by过程倾斜,应设为true
+		set hive.groupby.mapaggr.checkinterval=100000;
+			这个是group的键对应的记录条数超过这个值则会进行优化
+	
+	count distinct优化
+		select count(distinct id) from tablename;
+			count(distinct xx)操作只会启动一个job,处理工作量比较大:
+			只有1个reduce将所有的id去重,然后在count,比较耗时
+		优化为:(先在子表中做distinct,然后在count)
+		set mapred.reduce.tasks=3;
+		select count(1) from (select distinct id from tablename)tmp;
+		select count(1) from (select id from tablename group by id) tmp;
+			做子表distinct的话,子表操作为1个job,但可以启动多个reduce
+			count操作为最后的一个job,通过1个reduce聚合
+	
+		select a,sum(b),count(distinct c),count(distinct d) from test;
+		优化为:
+		select a,sum(b) as b,count(c) as c,count(d) as d from{
+		select a,0 as b,c,null as d from test group by a,c
+		union all
+		select a,0 as b,null as c,d from test group by a,d
+		union all
+		select a,b,null as c,null as d from test
+		)tmp1 group by a;
+		将a分别与c,d进行分组,并处理b和c或d
+		在将a与b操作,并处理b和c为null
+		然后将以上三种操作进行union all后进行group by a
+
+关于数据倾斜参考:
+	http://blog.csdn.net/xiao_jun_0820/article/details/32702375

@@ -1,0 +1,142 @@
+Hive数据加载
+----------------------
+hive内表(非外部表)数据加载
+	创建表时加载 create table newtable as select col1,col2 from oldtable
+	创建表时指定数据位置 create table tablename() location ''
+	
+	本地数据加载 load data local inpath 'localpath' [overwrite] into table tbl
+	加载hdfs数据 load data inpath 'hdfspath' [overwrite] into table tbl 注意:这是移动操作
+	使用Hadoop命令拷贝数据到指定位置(可分为:hive的shell中执行和linux中shell执行)
+	
+例:
+//创建表时指定数据位置
+drop table if exists test_m;
+create table test_m(name string,val string)
+row format delimited fields terminated by '\t'
+stored as textfile location '/data/test_m';
+//注意这里不是外部表,删除表将删除表对应的文件目录
+load data local inpath '/home/hadoop/test/hive/test/testext' into table test_m;
+//overwirte
+load data local inpath '/home/hadoop/test/hive/test/testext' overwrite into table test_m;
+//hdfs数据,注意这里是移动操作(保持源文件名,如果overwrite将删除该表中所有文件)
+load data inpath '/data/testext' overwrite into table test_m;
+//使用hadoop命令(文件可以指定,默认本地原名,如果目标文件存在,提示复制失败)
+hadoop fs -copyFromLocal /home/hadoop/test/hive/test/testext /data/test_m/testext1
+//使用hive方式从本地路径加载数据,同上,hive的shell中同样可以使用hadoop命令如下
+dfs -copyFromLocal /home/hadoop/test/hive/test/testext /data/test_m/testext1
+//hive中同样可以执行linux的shell命令,仅在命令前加一个'!'号
+	
+	由查询语句加载数据
+		insert [overwrite | into] table tablename
+		select col1,col2 from table where ...
+		或
+		from table insert [overwrite | into] table tablename
+		select col1,col2 where ...
+	其中from子句和select子句,where字句可放在前面和后面等位置
+	例:
+from testext insert overwrite table test_m
+select name,addr where name = 'zhangsan'
+	字段对应和关系型数据不同,以顺序为准,与字段名称无关
+
+
+外部表数据加载
+	创建表时指定location,同上
+	查询插入,同上
+	使用hadoop命令拷贝数据到指定位置,同上
+
+例创建表时指定location:
+create external table test_e(
+name string,val string)
+row format delimited fields terminated by '\t' lines terminated by '\n' 
+stored as textfile location '/external/data';
+
+Hive分区表数据加载
+--------------------------
+	分区表数据加载
+		内部分区表和外部分区表分别类似于内表和外表
+		注意:数据存放的路径层次要和表的分区一致;
+		如果分区表没有新增分区表,及时目标路径下已经有数据了,但依然查不到数据
+	不同之处
+		加载数据指定目标表的同时,需要指定分区
+	
+	本地数据加载
+		load data local inpath'localpath' [overwrite] into table tablename partition(pn='')
+	加载hdfs数据
+		load data inpath 'hdfspath' [overwrite] into table tablename partition(pn='')
+	由查询语句加载数据
+		insert [overwrite] into table tablename partition(pn='')
+		select col1,col2...from table ..where ..
+
+
+练习:
+//实例1:创建一个分区表
+create table test_p(
+name string,val string)
+partitioned by (dt string)
+row format delimited fields terminated by '\t' lines terminated by '\n' 
+stored as textfile;
+//加载时候需要指定分区:partition(dt='20160601')
+load data local inpath'/home/hadoop/test/hive/test/test_p'  into table test_p partition(dt='20160601');
+show partitions test_p;
+
+//实例2:创建一个外部分区表
+create external table test_ep(
+name string,val string)
+partitioned by (dt string)
+row format delimited fields terminated by '\t' lines terminated by '\n' 
+stored as textfile location '/data/test_ep';
+select * from test_ep;
+//hive中使用hadoop命令按照分区表格式创建并加载一个分区的数据
+hive> dfs -mkdir /external/data/dt=20160601;
+hive> dfs -copyFromLocal /home/hadoop/test/hive/test/test_p /data/test_ep/dt=20160601;
+//这时候使用select查询将会为空,查不到
+select * from test_ep;
+//以上操作需要在分区表中使用add partition进行添加对应的分区
+alter table test_ep add partition(dt='20160601');
+//然后查询才能出现结果
+select * from test_ep;
+wang	123	20160601
+liu	456	20160601
+zhang	789	20160601
+
+
+
+Hive数据加载注意问题
+	--------------------------
+	分隔符问题,且分隔符只认单个字符,如 '#\t' 默认是'#'
+	数据类型对应问题
+		load数据,字段类型不能互相转化,查询返回null
+		select查询插入,字段类型不能互相转化,插入数据为null,文件内容是在的
+	select查询插入数据,字段值顺序要与表中字段顺序一致,名称可不一致
+		hive在数据加载时不做检查,查询时检查(例如外部表)
+	外部表分区表需要添加分区才能看到数据
+实例1:
+create external table test_sp(
+name string,val string)
+row format delimited fields terminated by '#\t' lines terminated by '\n';
+test_sp(test#\t1格式)
+test1#	1
+test2#	2
+load data local inpath '/home/hadoop/test/hive/test/test_sp' into table test_sp;
+这里第二个字段其实是\t1和\t2,将\t作为了字段值的一部分
+hive> select * from test_sp;
+test1		1
+test2		2
+实例2:
+create external table test_sp2(
+name string,val string)
+row format delimited fields terminated by '\t';
+data2 (test1\t1格式)
+test1	1
+test2	2
+load data local inpath '/home/hadoop/test/hive/test/test_sp' into table test_sp2;
+hive> select * from test_sp2;
+test1#	1
+test2#	2
+
+对于文件存储的类型和hive表结构中类型不一致的时候,查询显示null,而文件的值是存在的,不演示了.
+注意:
+	如果从查询结果如原本类型string的插入到一个表对应类型为int的字段时,
+	hive查询显示null,在文件中显示的是\N,\N是hive存储null值默认符号
+	当然\N可以通过修改属性值来进行修改
+
