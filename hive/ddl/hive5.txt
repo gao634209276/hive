@@ -1,6 +1,0 @@
-Hive基本使用-查询
----------------------
-	基本语法
-select [all|distinct] select_expr,select_expr,...
-from table_name
-[where where_condition]

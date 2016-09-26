@@ -11,6 +11,8 @@ sort排序
 	两者结合出现,确保每个reduce的输出都是有序的
 	(但reduce各个输出之间不一定有序,sort by仅仅是对单个reduce输出排序,
 	如果用order by就会全局排序)
+	深入学习参考:
+	http://blog.csdn.net/meeasyhappy/article/details/8550167
 
 对比
 ------------
