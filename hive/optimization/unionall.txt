@@ -1,0 +1,75 @@
+hive union all 的用法：
+	不支持 top level，
+	各个select字段名称、属性必须严格一致
+
+
+同属性的多维组合统计
+字段:catePath0, catePath1, catePath2 url data
+数据json格式:
+https://cwiki.apache.org/confluence 0 1 8 {
+	"store":{
+		"fruit":[{"weight":1,"type":"apple"},{"weight":9,"type":"pear"}],
+		"bicycle":{"price":19.951,"color":"red1"}
+	},
+	"email":"amy@only_for_json_udf_test.net","owner":"amy1"
+}
+
+
+计算 catePath0, catePath1, catePath2 这三种维度组合下各个 url 对应的 pv、uv，如：
+数据:
+0 1 23 1 1
+0 1 25 1 1
+0 1 8 1 1
+0 1 ALL 3 3
+0 3 8 1 1
+0 3 98 1 1
+0 3 ALL 2 1
+0 5 118 1 1
+0 5 18 1 1
+0 5 81 1 1
+0 5 ALL 3 2
+0 ALL ALL 8 3
+ALL ALL ALL 8 3
+
+（3）解决思路：
+hive 中同属性多维统计问题通常用 union all 组合出各种维度然后 group by 进行求解：
+
+	create EXTERNAL table IF NOT EXISTS t_log (
+		url string, c0 string, c1 string, c2 string, unitparams string
+	) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' location '/tmp/decli/1';
+
+	select * from (
+	        select host, c0, c1, c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	    union all
+	        select host, c0, c1, 'ALL' c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	    union all
+	        select host, c0, 'ALL' c1, 'ALL' c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	    union all
+	        select host, 'ALL' c0, 'ALL' c1, 'ALL' c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	) test;
+
+	select c0, c1, c2, count(host) PV, count(distinct(host)) UV from (
+	        select host, c0, c1, c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	    union all
+	        select host, c0, c1, 'ALL' c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	    union all
+	        select host, c0, 'ALL' c1, 'ALL' c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	    union all
+	        select host, 'ALL' c0, 'ALL' c1, 'ALL' c2 from t_log t0
+	        LATERAL VIEW parse_url_tuple(url, 'HOST') t1 as host
+	        where get_json_object(t0.unitparams, '$.store.fruit[0].weight') != 9
+	) test group by c0, c1, c2;

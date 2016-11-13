@@ -42,8 +42,7 @@ Hive动态分区
 练习:
 创建有一个分区的分区表
 drop table d_part;
-create table d_part(name string)
-partitioned by (value string)
+create table d_part(name string)partitioned by (value string)
 row format delimited fields terminated by '\t' lines terminated by '\n';
 以addr作为value通过select insert进行动态分区
 insert into table d_part partition(value)
@@ -51,8 +50,7 @@ select name ,addr as value from testext;
 show partitions d_part;
 两个分区
 drop table d_part2;
-create table d_part2(name string)
-partitioned by (value string,dt string)
+create table d_part2(name string)partitioned by (value string,dt string)
 row format delimited fields terminated by '\t';
 
 insert into table d_part2 partition(value,dt)

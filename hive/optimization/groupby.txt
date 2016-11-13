@@ -1,0 +1,22 @@
+合并MapReduce操作
+
+不同属性的多维组合统计
+Multi-group by
+
+Multi-group by是Hive的一个非常好的特性，它使得Hive中利用中间结果变得非常方便。例如，
+
+	FROM (SELECT a.status, b.school, b.gender
+		FROM status_updates a JOIN profiles b
+		ON (a.userid = b.userid and
+		a.ds='2009-03-20')
+	) subq1
+
+	INSERT OVERWRITE TABLE gender_summary PARTITION(ds='2009-03-20')
+	SELECT subq1.gender, COUNT(1) GROUP BY subq1.gender
+
+	INSERT OVERWRITE TABLE school_summary PARTITION(ds='2009-03-20')
+	SELECT subq1.school, COUNT(1) GROUP BY subq1.school;
+
+上述查询语句使用了Multi-group by特性连续group by了2次数据，使用不同的group by key。这一特性可以减少一次MapReduce操作。
+
+

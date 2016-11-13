@@ -120,14 +120,3 @@ Map/Reduce优化:
 			perReducers=hive.exec.reducers.bytes.per.reducer
 
 
-
-
-
-
-
-
-
-
-
-				
-		

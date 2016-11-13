@@ -26,8 +26,7 @@ desc formatted testc;
 alter table table_name set serdeproperties('field.delim'='\t');
 实例:
 drop table if exists city;
-create table city(
-time string,country string,province string,city string)
+create table city(time string,country string,province string,city string)
 row format delimited fields terminated by '#'
 lines terminated by '\n' stored as textfile;
 /home/hadoop/test/city (数据格式)
@@ -51,8 +50,7 @@ alter table city set serdeproperties('field.delim'='\t');
 
 而对于分区表:
 drop table if exists city;
-create table city(
-time string,country string,province string,city string)
+create table city(time string,country string,province string,city string)
 partitioned by (dt string)
 row format delimited fields terminated by '#'
 lines terminated by '\n' stored as textfile;
@@ -79,8 +77,7 @@ alter table table_name set tblproperties('external'='false');//外部表转内�
 
 demo:
 drop table if exists city;
-create table city(
-time string,country string,province string,city string)
+create table city(time string,country string,province string,city string)
 row format delimited fields terminated by '\t'
 lines terminated by '\n' stored as textfile;
 alter table city set location 'hdfs://hadoop:9000/data/city';

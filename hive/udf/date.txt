@@ -1,0 +1,22 @@
+日期处理：
+select from_unixtime(unix_timestamp('20111102','yyyyMMdd') - N*86400,'yyyyMMdd') from t_lxw_test1 limit 1;
+
+
+关于日期函数:
+	select unix_timestamp();
+	select unix_timestamp('2016-12-07 13:01:03');
+	select unix_timestamp('2011-12-07 13:01:03','yyyy-MM-dd HH:mm:ss');
+	select from_unixtime(unix_timestamp(),'yyyyMMdd');
+	select to_date('2011-12-08 10:03:01');
+	select year('2011-12-08 10:03:01');
+	select month('2011-12-08 10:03:01');
+	select day('2011-12-08 10:03:01');
+	select hour('2011-12-08 10:03:01');
+	select minute('2011-12-08 10:03:01');
+	select second('2011-12-08 10:03:01');
+	select weekofyear('2011-12-08 10:03:01');
+	select datediff('2012-12-08','2012-05-09');
+	select date_add('2012-12-08',10);
+	select date_sub('2012-12-08',10);
+字符转换:
+	cast(salary AS STRING)

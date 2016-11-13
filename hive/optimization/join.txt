@@ -1,0 +1,13 @@
+怎样做笛卡尔积？
+当Hive设定为严格模式（hive.mapred.mode=strict）时，不允许在HQL语句中出现笛卡尔积，这实际说明了Hive对笛卡尔积支持较弱。
+因为找不到Join key，Hive只能使用1个reducer来完成笛卡尔积。
+当然也可以用上面说的limit的办法来减少某个表参与join的数据量，
+但对于需要笛卡尔积语义的需求来说，经常是一个大表和一个小表的Join操作，结果仍然很大（以至于无法用单机处理），这时MapJoin才是最好的解决办法。
+
+MapJoin，顾名思义，会在Map端完成Join操作。这需要将Join操作的一个或多个表完全读入内存。
+MapJoin的用法是在查询/子查询的SELECT关键字后面添加/*+ MAPJOIN(tablelist) */提示优化器转化为MapJoin
+（目前Hive的优化器不能自动优化MapJoin）。其中tablelist可以是一个表，或以逗号连接的表的列表。
+tablelist中的表将会读入内存，应该将小表写在这里。
+PS：有用户说MapJoin在子查询中可能出现未知BUG。
+在大表和小表做笛卡尔积时，规避笛卡尔积的方法是，给Join添加一个Join key，
+原理很简单：将小表扩充一列join key，并将小表的条目复制数倍，join key各不相同；将大表扩充一列join key为随机数。
