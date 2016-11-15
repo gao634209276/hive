@@ -10,7 +10,7 @@ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 
 @Description(name = "collect", value = "_FUNC_(x) - Returns a list of objects. "
-		+ "CAUTION will easily OOM on large data sets")
+		+ "CAUTION will easily OOM on large click_log.txt sets")
 public class GengericUDAFCollect extends AbstractGenericUDAFResolver {
 
 	public GengericUDAFCollect() {

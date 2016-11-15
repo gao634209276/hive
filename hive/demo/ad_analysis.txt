@@ -1,0 +1,69 @@
+create database if not exists local_db
+comment 'this is test database'
+location 'file:///home/hadoop/Documents/workspaces/idea/myHive/local_db';
+//with dbproperties('creator'='hadoop','date'='2016-11-12')
+
+点击日志表:
+//EXTERNAL
+//LOCATION 'file:///home/hadoop/Documents/workspaces/idea/myHive/local_db/click_log';
+CREATE  TABLE click_log (cookie_id  STRING,ad_id  STRING,ts STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+收集同一个用户点击的ad
+select cookie_id, collect_set(ad_id) as orders
+from click_log --where ts > '2014-05-02'
+group by cookie_id;
+收集同一个用户点击的ad并用|分开作为orders
+select cookie_id,concat_ws('|', collect_set(ad_id)) as orders
+from click_log --where ts > '2014-05-02'
+group by cookie_id;
+
+-----------------------------------------------
+广告信息表:(种类用array存放)
+CREATE TABLE ad_list (ad_id  STRING, url STRING, catalogs array<STRING>)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'
+COLLECTION ITEMS TERMINATED BY '|';
+
+(此表用EXTERNAL,指向广告信息表,设置种类为string)
+CREATE EXTERNAL TABLE ad_list_string (ad_id STRING, url STRING, catalogs STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'
+LOCATION 'file:///home/hadoop/Documents/workspaces/idea/myHive/local_db/ad_list';
+
+用户点击广告统计(amount),与广告信息表进行join关联得到种类
+select click.cookie_id, click.ad_id, click.amount, ad_list_string.catalogs as orders
+from (
+select cookie_id, ad_id, count(1) as amount from click_log group by cookie_id, ad_id
+) click
+join ad_list_string
+on (ad_list_string.ad_id = click.ad_id);
+
+将ad_list中广告种类分成多行
+select ad_id, catalog from ad_list LATERAL VIEW OUTER explode(catalogs) t AS catalog;
+将ad_list中广告种类分成多行,再次以ad_list聚合
+select ad_id, collect_set(catalog) from ad_list LATERAL VIEW OUTER explode(catalogs) t AS catalog group by ad_id;
+将ad_list中广告种类分成多行,讲该种类信息添加到click_log中
+select click.cookie_id, ad.catalog from click_log click
+left outer join (select ad_id, catalog from ad_list LATERAL VIEW OUTER explode(catalogs) t AS catalog) ad
+on (click.ad_id = ad.ad_id);
+
+将ad_list中广告种类分成多行,讲该种类信息加到到click_log中,然后求得同一个用户点击某个种类广告的权重,获取topN
+create table cookie_cats as
+select click.cookie_id, ad.catalog, count(1) as weight from click_log click
+left outer join (select ad_id, catalog from ad_list LATERAL VIEW OUTER explode(catalogs) t AS catalog) ad
+on (click.ad_id = ad.ad_id)
+group by click.cookie_id, ad.catalog
+order by cookie_id, weight desc;
+
+select cookie_id, collect_set(catalog) from cookie_cats group by cookie_id; -- where catalog is not null
+select cookie_id, group_concat(catalog, '|') from cookie_cats group by cookie_id; -- impala group_concat
+
+
+
+
+
+
+
+
+
+
+
+

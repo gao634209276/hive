@@ -1,0 +1,58 @@
+使用HIVE SQL实现推荐系统数据补全
+	在推荐系统场景中，如果基础行为数据太少，或者过于稀疏，
+	通过推荐算法计算得出的推荐结果很可能达不到要求的数量。
+	比如，希望针对每个item或user推荐20个item，但是通过计算只得到8个，剩下的12个就需要补全。
+策略
+数据补全的具体策略是：
+	补全时机：
+	在挖掘计算结束后，挖掘结果导入HBase（最终web系统从HBase取数据）前，进行数据补全，补全后的数据再导入HBase。
+	（还有另外一个可选时机，在接到请求后再在程序中实现补全，
+	但这样的效率肯定没有直接从HBase中读数的高，所以空间换时间是更为合理的策略）；
+	实现技术：补全过程基于HIVE实现；
+	补全数据：测试过程使用当前浏览item同分类下近一段时间的浏览量TopN；
+	测试场景：本文仅针对“看了又看”进行数据补全实验，其它推荐需求类似。
+实验过程
+1. 首先在Oracle下调试SQL
+	调试过程涉及两张表：
+	TEST_TOPN：该表中每行代表了一个item在某一天的访问量。
+	select apkkey,amount
+	TEST_X_AND_X：该表中每行代表了针对每一个item的看了又看的item及其访问量。
+	我们的目的，就是将该表补全，针对每个current_item都要有5个看了又看的item。
+    比如，针对10001号item，需要从it分类下取得top2填补到该表中来。
+    Oracle中通过以下SQL成功实现该目的：
+    select * from
+    (select row_number() over(partition by current_item_category,current_item_id order by source,view_count desc) no,
+    current_item_id, current_item_category, andx_item_id, source, view_count from
+    (select current_item_id, current_item_category, andx_item_id, 1 source, view_count
+    from test_x_and_x
+    union
+    select a.current_item_id,a.current_item_category,b.item_id,2,b.view_count
+    from
+    (select current_item_id,current_item_category from test_x_and_x
+    group by current_item_id,current_item_category) a, test_topn b
+    where a.current_item_category = b.item_category
+    )) where no<=5
+    注意：其中的source列用于标识数据来自原始表还是TOPN，所有TOPN的表数据都排在原始表数据之后。
+    2. 将Oracle中的SQL语句移植到HIVE中
+    成功移植的HIVE SQL：
+    select * from
+    (select rank() over(partition by c.current_item_category,c.current_item_id order by c.source,c.view_count desc) no,
+    c.current_item_id, c.current_item_category, c.andx_item_id, c.source, c.view_count
+    from
+    (select current_item_id,current_item_category,andx_item_id,1 source,view_count
+    from test_x_and_x
+    union all
+    select
+    a.current_item_id current_item_id,a.current_item_category
+    current_item_category,b.item_id andx_item_id,2 source,b.view_count
+    view_count
+    from
+    (select current_item_id,current_item_category from test_x_and_x
+    group by current_item_id,current_item_category) a, test_topn b
+    where a.current_item_category = b.item_category) c
+    ) d where d.no <= 5;
+    执行结果和Oracle中完全一致：
+    移植过程中遇到一些坑，特此记录：
+    HIVE只支持union all，不支持union；
+    union all的两张表，不仅要对应字段数据类型相同，字段名（可使用列别名）也必须完全相同；
+    每一个嵌套子查询的结果集都必须使用表别名！

@@ -1,0 +1,77 @@
+序列函数，NTILE,ROW_NUMBER,RANK,DENSE_RANK
+基本数据:
+USE local_db;
+CREATE EXTERNAL TABLE lxw1234 (cookieid string,createtime string, --day
+pv INT)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',';
+DESC lxw1234;
+select * from lxw1234;
+----------------------------------------------------
+NTILE
+NTILE(n)，用于将分组数据按照顺序切分成n片，返回当前切片值
+NTILE不支持ROWS BETWEEN，比如
+NTILE(2) OVER(PARTITION BY cookieid ORDER BY createtime ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+如果切片不均匀，默认增加第一个切片的分布
+SELECT cookieid,createtime,pv,
+NTILE(2) OVER(PARTITION BY cookieid ORDER BY createtime) AS rn1,--分组内将数据分成2片
+NTILE(3) OVER(PARTITION BY cookieid ORDER BY createtime) AS rn2,--分组内将数据分成3片
+NTILE(4) OVER(ORDER BY createtime) AS rn3 --将所有数据分成4片
+FROM lxw1234 ORDER BY cookieid,createtime;
+
+比如，统计一个cookie，pv数最多的前1/3的天
+SELECT cookieid,createtime,pv,
+NTILE(3) OVER(PARTITION BY cookieid ORDER BY pv DESC) AS rn
+FROM lxw1234;
+--rn = 1 的记录，就是我们想要的结果
+----------------------------------------------------
+ROW_NUMBER
+
+ROW_NUMBER() –从1开始，按照顺序，生成分组内记录的序列
+–比如，按照pv降序排列，生成分组内每天的pv名次
+ROW_NUMBER() 的应用场景非常多，再比如，获取分组内排序第一的记录;获取一个session中的第一条refer等。
+SELECT
+cookieid,
+createtime,
+pv,
+ROW_NUMBER() OVER(PARTITION BY cookieid ORDER BY pv desc) AS rn
+FROM lxw1234;
+
+-----------------------------------------------------
+RANK 和 DENSE_RANK
+—RANK() 生成数据项在分组中的排名，排名相等会在名次中留下空位
+—DENSE_RANK() 生成数据项在分组中的排名，排名相等会在名次中不会留下空位
+SELECT
+cookieid,
+createtime,
+pv,
+RANK() OVER(PARTITION BY cookieid ORDER BY pv desc) AS rn1,
+DENSE_RANK() OVER(PARTITION BY cookieid ORDER BY pv desc) AS rn2,
+ROW_NUMBER() OVER(PARTITION BY cookieid ORDER BY pv DESC) AS rn3
+FROM lxw1234
+WHERE cookieid = 'cookie1';
+
+rn1: 15号和16号并列第3, 13号排第5
+rn2: 15号和16号并列第3, 13号排第4
+rn3: 如果相等，则按记录值排序，生成唯一的次序，如果所有记录值都相等，或许会随机排吧。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,10 @@
+item1	100.2	catalogA|catalogD|catalogX
+item2	200.3	catalogA
+item3	300.4	catalogA|catalogX
+item4	400.5	catalogB
+item5	500.6	catalogB|catalogX
+item6	600.7	catalogB
+item7	700.8	catalogC
+item8	800.9	catalogC|catalogD
+item9	899.99	catalogC|catalogA
+	

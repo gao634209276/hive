@@ -1,0 +1,131 @@
+所有用户订单信息表f_orders(用户,时间,订单,物品)
+CREATE EXTERNAL TABLE f_orders
+(user_id STRING, ts STRING, order_id STRING, items map<STRING,BIGINT>)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'
+COLLECTION ITEMS TERMINATED BY '|'
+MAP KEYS TERMINATED BY ':';
+查询订单中包含item8的所有订单
+select * from f_orders where array_contains(map_keys(items), 'item8');
+将用户订单按item分为多行
+select user_id, order_id, item, amount from f_orders LATERAL VIEW explode(items) t AS item, amount;
+
+物品表d_items(名称,价格,种类)
+CREATE EXTERNAL TABLE d_items (
+item_sku STRING,price  DOUBLE,catalogs array<STRING>)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'
+COLLECTION ITEMS TERMINATED BY '|';
+将用户订单按item分为多行,与order_price关联获取价位算出总价,精确小数点2位
+select orders.user_id, orders.order_id, round(sum(d.price*orders.amount), 2) as order_price
+from (
+  select user_id, order_id, item, amount from f_orders LATERAL VIEW explode(items) t AS item, amount
+) orders
+join d_items d on (orders.item = d.item_sku)
+group by orders.user_id, orders.order_id;
+
+将用户订单按item分为多行,将物品按种类分为多行,求出用户订单和种类
+select orders.user_id, orders.item, orders.amount, catalogs.catalog
+from (
+  select user_id, item, amount from f_orders LATERAL VIEW explode(items) t AS item, amount
+) orders
+join (
+  select item_sku, catalog from d_items LATERAL VIEW explode(catalogs) t AS catalog
+) catalogs
+on (orders.item = catalogs.item_sku);
+
+select user_id, catalog, weight, row_number() OVER (PARTITION BY user_id ORDER BY weight DESC) as row_num FROM usr_cat_weight where user_id < '33';
+select user_id, catalog, weight, rank() OVER (PARTITION BY user_id ORDER BY weight DESC) as rnk FROM usr_cat_weight where user_id < '33';
+select user_id, catalog, weight, dense_rank() OVER (PARTITION BY user_id ORDER BY weight DESC) as drnk FROM usr_cat_weight where user_id < '33';
+
+CREATE TABLE usr_cat AS
+select user_id, catalog, row_number() OVER (PARTITION BY user_id ORDER BY weight DESC) as row_num
+FROM (
+select orders.user_id, catalogs.catalog, sum(orders.amount) as weight
+from (
+  select user_id, item, amount from f_orders LATERAL VIEW explode(items) t AS item, amount
+) orders
+join (
+  select item_sku, catalog from d_items LATERAL VIEW explode(catalogs) t AS catalog
+) catalogs
+on (orders.item = catalogs.item_sku)
+group by orders.user_id, catalogs.catalog
+order by user_id, weight
+) x
+ORDER BY user_id, row_num;
+
+select user_id, group_concat(catalog, '|') from usr_cat where row_num < 3 group by user_id;
+
+
+--========== d_users ==========--
+/*
+11;m;1981-01-01;user11@gmail.com;2014-04-21
+22;w;1982-01-01;user22@abcn.net;2014-04-22
+33;m;1983-01-01;user33@fxlive.de;2014-04-23
+77;w;1977-01-01;user77@fxlive.fr;2014-05-01
+88;m;1988-01-01;user88@fxlive.eu;2014-05-02
+99;w;1999-01-01;user99@abcn.net;2014-05-03
+789;m;2008-01-01;admin@abcn.net;2014-05-03
+*/
+CREATE EXTERNAL TABLE d_users (
+    user_id  STRING
+  , gender   STRING
+  , birthday STRING
+  , email    STRING
+  , regday   STRING
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\073'
+LOCATION '/tmp/db_case3/d_users';
+
+select user_id, birthday, translate(birthday, '0123456789', '1234567890'), email, translate(email, 'userfxgmail1234567890', '1234567890userfxgmail') from d_users;
+
+CREATE TABLE user_segment AS
+select c.user_id, u.gender, u.age, c.catalogs
+from (
+  select user_id, group_concat(catalog, '|') as catalogs from usr_cat where row_num < 3 group by user_id
+) c
+left outer join (
+  select user_id, gender, year(now()) - cast(substr(birthday, 1, 4) as int) as age from d_users
+) u
+on (c.user_id = u.user_id)
+;
+
+-- 也可以用impala做一些准备工作
+
+CREATE EXTERNAL TABLE f_orders_string (
+    user_id   STRING
+  , ts        STRING
+  , order_id  STRING
+  , items     STRING
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'
+LOCATION '/tmp/db_case3/f_orders';
+
+select u.user_id
+     , u.gender
+     , o.orders
+from d_users u
+left outer join (
+  select user_id, group_concat(order_id, '|') as orders
+  from f_orders_string
+  where ts > '2014-05-02'
+  group by user_id
+) o
+on (u.user_id = o.user_id);
+
+select o.user_id
+     , u.gender
+     , o.orders
+from (
+  select user_id, group_concat(order_id, '|') as orders
+  from f_orders_string
+  where ts > '2014-05-02'
+  group by user_id
+) o
+left outer join d_users u
+on (o.user_id = u.user_id);
+
+-- Hive / Impala JDBC 及中文支持问题
+
+beeline -u "jdbc:hive2://itr-hbasetest01:10000/"
+sudo vi /opt/cloudera/parcels/CDH/lib/hive/bin/hive
+
+beeline -u "jdbc:hive2://itr-hbasetest02:21050/;auth=noSasl"

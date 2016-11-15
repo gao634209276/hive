@@ -1,0 +1,5 @@
+ad_101	http://abcn.net/	catalog8|catalog1
+ad_102	http://www.abcn.net/	catalog6|catalog3
+ad_103	http://fxlive.de/	catalog7
+ad_104	http://fxlive.fr/	catalog5|catalog1|catalog4|catalog9
+ad_105	http://fxlive.eu/

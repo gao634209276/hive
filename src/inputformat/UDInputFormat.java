@@ -44,7 +44,7 @@ public class UDInputFormat<K, V> extends SequenceFileInputFormat<K, V> {
 			if (file.isDirectory()) { // it's a MapFile
 				Path p = file.getPath();
 				FileSystem fs = p.getFileSystem(job.getConfiguration());
-				// use the data file
+				// use the click_log.txt file
 				files.set(i,
 						fs.getFileStatus(new Path(p, MapFile.DATA_FILE_NAME)));
 			}

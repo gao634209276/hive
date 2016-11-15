@@ -1,0 +1,4 @@
+1	english	78
+1	chinese	89
+2	english	90
+2	chinese	88

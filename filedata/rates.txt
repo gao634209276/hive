@@ -1,0 +1,10 @@
+app0	1
+app1	2
+app2	2
+app3	3
+app4	3
+app5	3
+app6	5
+app7	5
+app8	5
+app9	5
