@@ -1,0 +1,221 @@
+1.下载并解压hive
+vi /etc/profile
+export HIVE=/opt/hive-1.2.1
+export PATH=${HIVE}/bin:${PATH}
+
+
+3.配置hive配置文件
+
+    3.1 修改日志文件
+cp /opt/hive-1.2.1/conf/hive-log4j.properties.template /opt/hive-1.2.1/conf/hive-log4j.properties
+
+    3.2 修改hive启动环境
+cp /opt/hive-1.2.1/conf/hive-env.sh.template /opt/hive-1.2.1/conf/hive-env.sh
+vi /opt/hive-1.2.1/conf/hive-env.sh
+export HADOOP_HOME=/opt/hadoop-2.7.1
+export HIVE_CONF_DIR=/opt/hive-1.2.1/conf
+
+     3.3 修改hive启动配置
+    vi /opt/hive-1.2.1/bin/hive-config.sh
+export JAVA_HOME=/opt/jdk1.7.0_65
+export HIVE_HOME=/opt/hive-1.2.1
+export HADOOP_HOME=/opt/hadoop-2.7.1
+
+    3.4 修改hive配置文件hive-site.xml
+    cp /opt/hive-1.2.1/conf/hive-default.xml.template /opt/hive-1.2.1/conf/hive-site.xml
+
+<configuration>
+        <property>
+          <name>hive.metastore.warehouse.dir</name>
+          <value>hdfs://master:9000/hive/warehouse</value>
+        </property>
+        <property>
+          <name>hive.exec.scratchdir</name>
+          <value>hdfs://master:9000/hive/scratchdir</value>
+        </property>
+        <property>
+          <name>javax.jdo.option.ConnectionDriverName</name>
+          <value>com.mysql.jdbc.Driver</value>
+        </property>
+        <property>
+          <name>javax.jdo.option.ConnectionURL</name>
+          <value>jdbc:mysql://192.168.202.131:3306/hivemeta?createDatabaseIfNotExist=true</value>
+        </property>
+        <property>
+          <name>javax.jdo.option.ConnectionUserName</name>
+          <value>hadoop</value>
+        </property>
+        <property>
+          <name>javax.jdo.option.ConnectionPassword</name>
+          <value>hadoop</value>
+          <description>password to use against metastore database</description>
+        </property>
+
+        <property>
+          <name>hive.querylog.location</name>
+          <value>/opt/hive-1.2.1/logs</value>
+        </property>
+
+        <property>
+          <name>hive.aux.jars.path</name>
+          <value>file:///opt/hive-1.2.1/lib/hive-hbase-handler-1.2.1.jar,file:///opt/hive-1.2.1/lib/protobuf-java-2.5.0.jar,file:///opt/hive-1.2.1/lib/hbase-client-1.1.2.jar,file:///opt/hive-1.2.1/lib/hbase-common-1.1.2.jar,file:///opt/hive-1.2.1/lib/zookeeper-3.4.6.jar,file:///opt/hive-1.2.1/lib/guava-14.0.1.jar</value>
+          <description>The location of the plugin jars that contain implementations of user defined functions and serdes.</description>
+        </property>
+        <property>
+          <name>hive.metastore.uris</name>
+          <value>thrift://master:9083,thrift://slavery01:9083,thrift://slavery03:9083</value>
+          <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
+        </property>
+
+        <property>
+                <name>hive.hwi.war.file</name>
+                <value>lib/hive-hwi-1.2.1.war</value>
+        </property>
+          <property>
+              <name>hive.hwi.listen.port</name>
+                  <value>9998</value>
+                  <description>This is the port the Hive Web Interface will listen on</description>
+         </property>
+</configuration>
+
+4.创建hive.log存放目录
+mdkdir /opt/hive-1.2.1/logs
+
+ 5.创建hive在HDFS上数据目录和日志目录
+cd /opt/hadoop-2.7.1/bin
+./hdfs dfs -ls /
+./hdfs dfs -mkdir /hive
+./hdfs dfs -mkdir /hive/warehouse
+./hdfs dfs -mkdir /hive/scratchdir
+./hdfs dfs -chmod 777 /hive/warehouse
+./hdfs dfs -chmod 777 /hive/scratchdir
+
+
+ 6.增加hive链接MySQL需要的驱动包
+去MySQL官网下载mysql-connector-java-5.1.38.java
+放置于/opt/hive-1.2.1/lib
+
+
+
+
+ 7.Hadoop+hbase+hive集成相关操作，不需要集成hbase，这个可不做
+cp /opt/hive-1.2.1/lib/hive-hbase-handler-1.2.1.jar                     /opt/hive-1.2.1/lib/
+cp /opt/hive-1.2.1/lib/guava-14.0.1.jar                                 /opt/hive-1.2.1/lib/
+cp /opt/hadoop-2.7.1/share/hadoop/hdfs/lib/protobuf-java-2.5.0.jar      /opt/hive-1.2.1/lib/
+cp /opt/hbase-1.1.2/lib/hbase-client-1.1.2.jar                          /opt/hive-1.2.1/lib/
+cp /opt/hbase-1.1.2/lib/hbase-common-1.1.2.jar                          /opt/hive-1.2.1/lib/
+cp /opt/hadoop-2.7.1/share/hadoop/tools/lib/zookeeper-3.4.6.jar         /opt/hive-1.2.1/lib/
+#同步hive的jline版本和Hadoop下版本
+find /opt/hadoop-2.7.1/ -name "jline-*.jar"
+/opt/hadoop-2.7.1/share/hadoop/httpfs/tomcat/webapps/webhdfs/WEB-INF/lib/jline-0.9.94.jar
+/opt/hadoop-2.7.1/share/hadoop/kms/tomcat/webapps/kms/WEB-INF/lib/jline-0.9.94.jar
+find /opt/hive-1.2.1/ -name "jline-*.jar"
+/opt/hive-1.2.1/lib/jline-2.12.jar
+cp /opt/hive-1.2.1/lib/jline-2.12.jar /opt/hadoop-2.7.1/share/hadoop/httpfs/tomcat/webapps/webhdfs/WEB-INF/lib/
+cp /opt/hive-1.2.1/lib/jline-2.12.jar /opt/hadoop-2.7.1/share/hadoop/kms/tomcat/webapps/kms/WEB-INF/lib/
+rm -rf /opt/hadoop-2.7.1/share/hadoop/httpfs/tomcat/webapps/webhdfs/WEB-INF/lib/jline-0.9.94.jar
+rm -rf /opt/hadoop-2.7.1/share/hadoop/kms/tomcat/webapps/kms/WEB-INF/lib/jline-0.9.94.jar
+
+
+
+ 8.hive服务介绍
+    8.1 metastore启动方式
+#非后台启动
+cd /opt/hive-1.2.1/bin
+./hive --service metastore
+#后台启动
+cd /opt/hive-1.2.1/bin
+./hive --service metastore &
+    所有服务中metastore，必须启动，这个就像oracle 监听器一样，不过也不恰当，hive中用户自己建的表的元数据（叫啥名，有啥列）都通过这个服务存储到上面的元数据库MySQL中
+
+    8.2 hiveserver2
+#非后台启动
+cd /opt/hive-1.2.1/bin
+./hive --service hiveserver2
+#后台启动
+cd /opt/hive-1.2.1/bin
+./hive --service hiveserver2 &
+    这个服务启动主要是为了让程序通过JDBC方式连接到hive进而操作hive，所以不用程序连接，就不必要启动了，还有个要注意，老版本中服务名叫hiveserver，新版本中叫hiveserver2
+
+    8.3  hive hwi服务
+     这个服务就是有个hive自带的web管理界面http://192.168.202.131:9999/hwi  ，让你查看hive状态，需要一个war，只有老版本有，新版本没有的
+      war没有的话，这么获取：
+tar -zxvf apache-hive-1.2.1-src.tar.gz
+cd apache-hive-1.2.1-src/hwi/web
+zip hive-hwi-1.2.1.war  ./*
+cp hive-hwi-1.2.1.war /opt/hive-1.2.1/lib/
+    服务启动方式：
+cd /opt/hive-1.2.1/bin
+./hive --service hwi
+    启动时遇到的错误：hive NO JSP Support for /hwi, did not find org.apache.jasper.servlet.JspServlet
+解决办法：1.安装ant;
+          2.下载commons-el-5.5.23.jar放置于/opt/hive-1.2.1/lib下；
+          3.下载jasper-compiler-5.5.23.jar放置于/opt/hive-1.2.1/lib下；
+          4.下载jasper-runtime-5.5.23.jar放置于/opt/hive-1.2.1/lib下；
+    启动是遇到的错误：Unable to find a javac compiler;    It is currently set to "/opt/jdk1.7.0_65/jre"
+解决办法：
+ cp /opt/jdk1.7.0_65/lib/tools.jar    /opt/hive-1.2.1/lib;
+
+
+    8.4 hive client shell
+    这个就是个shell，供用户登录上去像MySQL一样操作hive
+cd /opt/hive-1.2.1/bin
+./hive shell
+
+    8.5  hive beeline
+     另一个客户端shell，启动此服务之前首先需要启动metastore和和Iveserver2，据说会取代hive client shell
+[hadoopmanage@master bin]$ pwd
+/opt/hive-1.2.1/bin
+[hadoopmanage@master bin]$ ls
+beeline  ext  hive  hive-config.sh  hiveserver2  metatool  schematool
+[hadoopmanage@master bin]$ ./beeline
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/spark-1.6.0-bin-hadoop2.6/lib/spark-assembly-1.6.0-hadoop2.6.0.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop-2.7.1/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.slf4j.impl.Log4jLoggerFactory]
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/spark-1.6.0-bin-hadoop2.6/lib/spark-assembly-1.6.0-hadoop2.6.0.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop-2.7.1/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.slf4j.impl.Log4jLoggerFactory]
+Beeline version 1.2.1 by Apache Hive
+beeline> !connect jdbc:hive2://localhost:10000 hadoop hadoop org.apache.hive.jdbc.HiveDriver
+Connecting to jdbc:hive2://localhost:10000
+Connected to: Apache Hive (version 1.2.1)
+Driver: Hive JDBC (version 1.2.1)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+0: jdbc:hive2://localhost:10000> show databases;
+OK
++----------------+--+
+| database_name  |
++----------------+--+
+| default        |
++----------------+--+
+1 row selected (5.83 seconds)
+0: jdbc:hive2://localhost:10000> show tables;
+OK
++-----------+--+
+| tab_name  |
++-----------+--+
++-----------+--+
+No rows selected (0.74 seconds)
+0: jdbc:hive2://localhost:10000>
+
+9.遇到的错误
+
+    9.1 集成hbase，新版本1.2.1还未解决
+FAILED: Execution Error,
+return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask.
+org.apache.hadoop.hbase.HTableDescriptor.addFamily(Lorg/apache/hadoop/hbase/HColumnDescriptor;)V
+
+     9.2 JDBC链接hive
+Exception in thread "main" java.sql.SQLException: No suitable driver found for
+jdbc:hive://localhost:10000/default
+    解决：
+jdbc:hive2://localhost:10000/default不要jdbc:hive
+
+有结果集的用resultset=stmt.executeQuery(sql);
+无结果集的用stmt.execute(sql);
+
+     9.3 hive中类型我不太清楚，元数据库编码类型有点敏感，没去查MySQL中为啥要latin1,上次我元数据库为MySQL，默认编码，建表报长度越界，后来删除在MySQL上元数据库，重建元数据库，设置编码为latin1   问题解决

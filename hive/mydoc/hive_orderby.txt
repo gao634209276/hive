@@ -1,0 +1,24 @@
+Oder by
+只会有一个reduce task
+数据全局有序
+速度可能会非常慢
+Strict模式下，必须与limit连用
+
+Sort by
+可以有多个reduce task
+数据的各个分片有序
+通常与distribute by连用
+
+distrubute by
+相当于mapreduce中的partitioner，默认是基于hash实现的
+与sort by连用，可发挥很好的作用
+select s.ymd,s.symbol,s.price_close
+from stocks s
+distribute by s.symbol
+sort by s.symbol asc, s.ymd asc;
+
+cluster by
+当disteibute by与sort by（降序）连用，且跟随的字段相同时，可使用distribute by简写；
+select s.ymd, s.symbol,s.price_close
+from stocks s
+cluster by s.symbol;

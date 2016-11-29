@@ -1,0 +1,388 @@
+
+1.如何预先查看hive执行情况？
+2.如何查看hive有多少job?
+
+Hive中在做多表关联时,由于Hive的SQL优化引擎还不够强大,表的关联顺序不同往往导致产生不同数量的MapReduce作业数。这时就需要通过分析执行计划对SQL进行调整，以获得最少的MapReduce作业数。举一个例子（案例基于Hive 0.6.0）：
+create table ljn1(
+k1 bigint,
+k2 String,
+v1 int
+);
+create table ljn2(
+k1 bigint,
+v2 int
+);
+create table ljn3(
+k1 bigint,
+v3 int
+);
+create table ljn4(
+k1 bigint,
+v4 int
+);
+create table ljn5(
+k1 bigint,
+v5 int
+);
+create table ljn6(
+k2 string,
+v6 int
+);
+然后看一下下面这个SQL的执行计划:
+explain
+select a.v1
+from
+ljn1 a
+left outer join ljn2 b on (a.k1 = b.k1)
+left outer join ljn3 c on (a.k1 = c.k1)
+left outer join ljn4 d on (a.k1 = d.k1)
+left outer join ljn6 e on (a.k2 = e.k2)
+left outer join ljn5 f on (a.k1 = f.k1);
+STAGE DEPENDENCIES:
+  Stage-5 is a root stage
+  Stage-1 depends on stages: Stage-5
+  Stage-2 depends on stages: Stage-1
+  Stage-0 is a root stage
+STAGE PLANS:
+  Stage: Stage-5
+    Map Reduce
+      Alias -> Map Operator Tree:
+        a
+          TableScan
+            alias: a
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 0
+              value expressions:
+                    expr: k1
+                    type: bigint
+                    expr: k2
+                    type: string
+                    expr: v1
+                    type: int
+        b
+          TableScan
+            alias: b
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 1
+      Reduce Operator Tree:
+        Join Operator
+          condition map:
+               Left Outer Join0 to 1
+          condition expressions:
+            0 {VALUE._col0} {VALUE._col1} {VALUE._col2}
+            1
+          handleSkewJoin: false
+          outputColumnNames: _col0, _col1, _col2
+          File Output Operator
+            compressed: true
+            GlobalTableId: 0
+            table:
+                input format: org.apache.hadoop.mapred.SequenceFileInputFormat
+                output format: org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat
+  Stage: Stage-1
+    Map Reduce
+      Alias -> Map Operator Tree:
+        $INTNAME
+            Reduce Output Operator
+              key expressions:
+                    expr: _col0
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: _col0
+                    type: bigint
+              tag: 0
+              value expressions:
+                    expr: _col1
+                    type: string
+                    expr: _col2
+                    type: int
+        c
+          TableScan
+            alias: c
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 1
+        d
+          TableScan
+            alias: d
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 2
+        f
+          TableScan
+            alias: f
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 3
+      Reduce Operator Tree:
+        Join Operator
+          condition map:
+               Left Outer Join0 to 1
+               Left Outer Join0 to 2
+               Left Outer Join0 to 3
+          condition expressions:
+            0 {VALUE._col3} {VALUE._col4}
+            1
+            2
+            3
+          handleSkewJoin: false
+          outputColumnNames: _col3, _col4
+          File Output Operator
+            compressed: true
+            GlobalTableId: 0
+            table:
+                input format: org.apache.hadoop.mapred.SequenceFileInputFormat
+                output format: org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat
+  Stage: Stage-2
+    Map Reduce
+      Alias -> Map Operator Tree:
+        $INTNAME
+            Reduce Output Operator
+              key expressions:
+                    expr: _col3
+                    type: string
+              sort order: +
+              Map-reduce partition columns:
+                    expr: _col3
+                    type: string
+              tag: 0
+              value expressions:
+                    expr: _col4
+                    type: int
+        e
+          TableScan
+            alias: e
+            Reduce Output Operator
+              key expressions:
+                    expr: k2
+                    type: string
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k2
+                    type: string
+              tag: 1
+      Reduce Operator Tree:
+        Join Operator
+          condition map:
+               Left Outer Join0 to 1
+          condition expressions:
+            0 {VALUE._col10}
+            1
+          handleSkewJoin: false
+          outputColumnNames: _col10
+          Select Operator
+            expressions:
+                  expr: _col10
+                  type: int
+            outputColumnNames: _col0
+            File Output Operator
+              compressed: true
+              GlobalTableId: 0
+              table:
+                  input format: org.apache.hadoop.mapred.TextInputFormat
+                  output format: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+  Stage: Stage-0
+    Fetch Operator
+      limit: -1
+常规来讲,这个SQL非常简单,a表是主表，与其他表左外关联用到了k1和k2两个关联键，使用两个MapReduce作业完全可以搞定。但是这个SQL的执行计划却给出了3个作业：（Stage-0用做数据的最终展示，该作业可以忽略不计）第1个作业（Stage-5）是a表与b表关联；第2个作业（Stage-1）是第1个作业的中间结果再与c、d、f三表关联；第3个作业（Stage-2）是第2个作业的中间结果再与e表关联。
+有点搞不懂了吧，第1和第2个作业明明可以合并在一起来完成的呀！其实我也搞不懂，从执行计划中看不出原由。而且如果这个SQL去掉c或者e其中的一个关联表，第1和第2个作业就可以合并在一起！很奇妙，我没有深入探究，应该是Hive的规则优化器还不够完美。
+总之，遇到这种多表关联的情况一定要记得看一下执行计划，看看Hive是不是生成了多余的作业。如果Hive真的犯傻生成了多余的作业，就要尝试改变一下SQL的写法。通常是将关联键相同的表放在一起，如果还不行就再引入子查询。例如上面这个例子改为如下SQL就可以只生成2个作业了：
+explain
+select t.v1
+from
+(
+select a.k2,a.v1
+from
+ljn1 a
+left outer join ljn2 b on (a.k1 = b.k1)
+left outer join ljn3 c on (a.k1 = c.k1)
+left outer join ljn4 d on (a.k1 = d.k1)
+left outer join ljn5 f on (a.k1 = f.k1)
+) t
+left outer join ljn6 e on (t.k2 = e.k2)
+;
+STAGE DEPENDENCIES:
+  Stage-1 is a root stage
+  Stage-2 depends on stages: Stage-1
+  Stage-0 is a root stage
+STAGE PLANS:
+  Stage: Stage-1
+    Map Reduce
+      Alias -> Map Operator Tree:
+        t:a
+          TableScan
+            alias: a
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 0
+              value expressions:
+                    expr: k2
+                    type: string
+                    expr: v1
+                    type: int
+        t:b
+          TableScan
+            alias: b
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 1
+        t:c
+          TableScan
+            alias: c
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 2
+        t:d
+          TableScan
+            alias: d
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 3
+        t:f
+          TableScan
+            alias: f
+            Reduce Output Operator
+              key expressions:
+                    expr: k1
+                    type: bigint
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k1
+                    type: bigint
+              tag: 4
+      Reduce Operator Tree:
+        Join Operator
+          condition map:
+               Left Outer Join0 to 1
+               Left Outer Join0 to 2
+               Left Outer Join0 to 3
+               Left Outer Join0 to 4
+          condition expressions:
+            0 {VALUE._col1} {VALUE._col2}
+            1
+            2
+            3
+            4
+          handleSkewJoin: false
+          outputColumnNames: _col1, _col2
+          Select Operator
+            expressions:
+                  expr: _col1
+                  type: string
+                  expr: _col2
+                  type: int
+            outputColumnNames: _col0, _col1
+            File Output Operator
+              compressed: true
+              GlobalTableId: 0
+              table:
+                  input format: org.apache.hadoop.mapred.SequenceFileInputFormat
+                  output format: org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat
+  Stage: Stage-2
+    Map Reduce
+      Alias -> Map Operator Tree:
+        $INTNAME
+            Reduce Output Operator
+              key expressions:
+                    expr: _col0
+                    type: string
+              sort order: +
+              Map-reduce partition columns:
+                    expr: _col0
+                    type: string
+              tag: 0
+              value expressions:
+                    expr: _col1
+                    type: int
+        e
+          TableScan
+            alias: e
+            Reduce Output Operator
+              key expressions:
+                    expr: k2
+                    type: string
+              sort order: +
+              Map-reduce partition columns:
+                    expr: k2
+                    type: string
+              tag: 1
+      Reduce Operator Tree:
+        Join Operator
+          condition map:
+               Left Outer Join0 to 1
+          condition expressions:
+            0 {VALUE._col1}
+            1
+          handleSkewJoin: false
+          outputColumnNames: _col1
+          Select Operator
+            expressions:
+                  expr: _col1
+                  type: int
+            outputColumnNames: _col0
+            File Output Operator
+              compressed: true
+              GlobalTableId: 0
+              table:
+                  input format: org.apache.hadoop.mapred.TextInputFormat
+                  output format: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+  Stage: Stage-0
+    Fetch Operator
+      limit: -1

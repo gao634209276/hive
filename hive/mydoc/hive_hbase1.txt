@@ -1,0 +1,411 @@
+
+1.能否说出hive与hbase对应版本
+2.hive-hbase-handler.jar在于hbase、hive中起的作用是什么？
+3.hive-hbase-handler.jar是否有版本之分，不同版本是否都能使用这个包来整合hbase与hive？
+4.整合过程中hive-hbase-handler.jar应该放在hive的哪个文件夹中？
+
+简介：
+从6.0版本以后，hive推出了storage-handler，用于将数据存储到HDFS以外的其他存储上。并方便的通过hive进行插入、查询等操作。同时hive提供了针对Hbase的hive-hbase-handler。这使我们在使用hive节省开发M/R代码成本的同事还能获得HBase的特性来快速响应随机查询。
+但是，hive自带的hive-hbase-handler是针对特定版本的Hbase的，比如，0.7.0版本的hive编译时使用的是0.89.0版本的Hbase，0.6.0版本的hive默认使用0.20.3版本的hbase进行编译。如果能够找到对应的版本，可以跳过编译的步骤直接使用。不过，我们现状已经找不到这些版本的Hbase与之配合使用了。所以只好自己来编译这个jar包。
+注：使用不匹配的版本，一些功能会发生异常。笔者尝试过hive-0.6.0和hbase0.20.6版本配合使用而没有重新编译storage-handler组件，发现在hive中查询HBase表存在问题。
+这里在强调一下：hive-hbase-handler.jar的作用在hbase与hive整合的时候发挥了重要作用，有了这个包，hbase与hive才能通信：具体可以参考：
+Hadoop Hive与Hbase整合+thrift
+
+同时这里附上这个包：
+下载  密码: aily
+包说明：此包适合hbase0.96与hive0.12其它整合俊不适合。
+
+准备：
+编译这个jar包需要hadoop和hbase的相关jar包和hive的hbase-handler代码。我是在windows上使用eclipse进行编译的。使用的各个软件的版本如下：
+Java1.6（1.5版本及以上均可）
+Eclipse-3.2.1
+hadoop-0.20.2
+hbase-0.20.6
+hive-0.6.0
+将所需的代码和jar包放如eclipse中编译，并导出jar包即可。将生成的jar包和我们使用的hbase-0.20.6.jar、hbase-0.20.6-test.jar放入hive的lib目录下替换原有jar包。
+注意：hive的0.6.*版本和hbase的0.20.*版本对应，0.7.*版本和hbase的0.8*~0.9*对应，因为hive0.7.*的hbaseHandler会需要Hbase的0.8*以后版本中定义的一个ZooKeeperConnectionException在以前的版本中没有该类，所以会找不到类。
+如果要使用0.7.*版本的hive和0.20.*版本的Hbase，可以修改抛出的异常类型，或使用0.6*版本中的代码来编译hive-hbase-handler.jar，尝试过可以正常使用。
+编译：
+创建项目
+在eclipse中创建一个项目。
+
+选择java project即可。
+
+随便起个名，finish即可。
+导入代码
+在创建好的项目上点击右键，选择Import
+
+选择General下的FileSystem
+
+找到hive-0.7.0\src\hbase-handler\src\java目录选择其中的org目录导入
+
+添加依赖包
+导入代码后可以看到很多的错误提示。这时由于没有引入依赖的jar包导致的。下面，我们引入
+
+选择java Build Path在Libraries标签选择Add External JARs
+
+加入如下jar包
+
+由于hadoop的代码使用JDK1.5进行编译的，所以可能有一些@Override会报错。删掉即可。
+生成jar包
+至此旧可以导出我们需要的jar包了。在org.apache.hadoop.hive.hbase包上点击右键，选择export
+
+选择java下的JAR file
+
+选择一个生成位置，即可点击完成。
+
+到这里我们就生成了复合自己Hbase版本的hive-hbase-handler了。
+hive-hbase-handler.jar的使用
+     由于需要HBase，所以先运行hadoop、HBase最后运行hive，运行时需要使用参数指定我们需要使用的jar包，以及HBase的各个节点机器名。
+
+hive的运行参数
+编译好jar包就可以运行hive了。运行时有一些参数需要设置。
+1、将hive-hbase-handler的jar包加入hive的classpath中。
+2、链接HBase参数：
+    a）单节点HBase：hbase.master=master:60000
+     b）HBase集群：hbase.zookeeper.quorum=slave-001,slave-002,slave-003
+
+参数的设置
+根据需求可以使用不同的方式来进行设置：
+1、最简单的是先将生成的jar包和hbase的hbase-0.20.6.jar放到hive/lib目录中。然后运行如下命令
+./hive-hiveconf hbase.zookeeper.quorum= master,slave-A,slave-B
+              注意：所有的节点的hive/lib目录中都需要放好相应的jar包。
+
+2、如果使用了自己编译的jar包，而且该jar包不想放入hive/lib目录中或者希望只在一个节点部署hive，就需要使用下面的命令来启动。
+./hive--auxpath /.../lib/hive_hbase-handler.jar,/.../lib/hbase-0.20.3.jar,/.../lib/zookeeper-3.2.2.jar -hiveconf hbase.zookeeper.quorum=slave-001,slave-002,slave-003
+也可以直接使用./hive进入hive的shell界面，再运行如下命令进行设置。
+hive>addjar /.../lib/hive_hbase-handler.jar /.../lib/hbase-0.20.3.jar/.../lib/zookeeper-3.2.2.jar;
+hive>set hbase.zookeeper.quorum=slave-001,slave-002,slave-003;
+
+    注：使用 --auxpath添加我们的jar包，-hiveconf是配置hive运行时参数的，这里我们用来配置hbase的节点机器名。
+        一般需要长期支持的可以用第一种方法直接将jar包放入hive的lib目录或者用第二种方法，并编写启动脚本。如果只是临时使用的jar包，则使用第三种方式执行即可。
+注意：所有的jar包要使用物理路径，否则在用到时会报错。
+Wrong FS:file://lib/***.jar, expected: file:///
+表的创建
+进入hive我们就可以创建使用Hbase来保存数据的表了。
+语法
+CREATE[EXTERNAL] TABLE [IF NOT EXISTS] [db_name.]table_name
+[(col_name data_type [COMMENT col_comment], ...)]
+[COMMENT table_comment]
+STORED BY 'storage.handler.class.name' [WITH SERDEPROPERTIES (...)]
+[TBLPROPERTIES (property_name=property_value, ...)]
+解释下面几个地方：
+1、STORED BY指定我们使用的storage-handler的java类。
+2、WITH SERDEPROPERTIES设置参数（hive参数或自定义参数）。这个是STOREDBY特有的参数。参数设置格式，参数名=参数值。例如"hbase.table.name" ="xyz"。参数之间使用逗号’,’隔开。
+3、TBLPROPERTIES这个语法也是设置参数，但是针对普通表的参数设置。可设置多个参数。
+注意：
+一个Hbase表必须设置的参数是列的映射（hbase.columns.mapping）。这个参数必须在WITH SERDEPROPERTIES中设置。
+在hbase.columns.mapping中':key'表示行号，如果没有':key'则第一列为行号。
+hive所支持的map类型字段应该对应一个列簇，即需要以冒号':'结尾，例如'f:'。
+比较常用的参数是hbase.table.name，这个参数用来指定Hbase中存储的表的表名，设置的位置没有特殊要求。WITHSERDEPROPERTIES或TBLPROPERTIES中都可以。
+其它的建表语法在hive中没有支持。CLUSTERED BY、SORTEDBY、BUCKETS、LOCATION、CREATE TABLE AS SELECT、CREATE TABLE LIKE这些语法都不支持。
+建表
+使用
+CREATETABLE hbase_table_1(key int, value string)
+STOREDBY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITHSERDEPROPERTIES ("hbase.columns.mapping" =":key,cf1:val")
+TBLPROPERTIES("hbase.table.name" = "aaa");
+或者使用
+CREATETABLE hbase_table_1(key int, value string)
+STOREDBY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITHSERDEPROPERTIES ("hbase.table.name"="aaa" ,"hbase.columns.mapping"=":key,cf1:val");
+来创建Hbase表。
+表创建后可以到Hbase中查看相应的表会被同时创建（如果是外部表则创建hive表之前就已经存在）。
+
+hbase(main):025:0>  list
+
+aaa
+
+t1
+
+xyz
+
+3  row(s) in 0.0090 seconds
+
+hbase(main):027:0>  describe 'aaa'
+
+DESCRIPTION                                                              ENABLED
+
+{NAME  => 'aaa', FAMILIES => [{NAME => 'cf1', COMPRESSION => 'NONE', VE  true
+
+RSIONS  => '3', TTL => '2147483647', BLOCKSIZE => '65536', IN_MEMORY  =>
+
+   'false', BLOCKCACHE =>  'true'}]}
+
+1  row(s) in 0.0180 seconds
+
+注意事项
+1、建表时，hive会对Hbase中表的存在行做检查。
+如果创建的是普通表，则表存在时报错。若创建的是外部表，则表不存在时报错。
+也就是说一个Hbase表只能有一个普通hive表和它对应。但多个外部表可以同时链接到一个Hbase表。
+2、不推荐使用PARTITION。这种接口对于PARTITION的支持不够好。分区之后select *不能正确执行，其他的查询需要做mapredceu还是能够得到正确结果的。
+3、建表语法中的ROWFORMAT(DELIMITED or SERDE) 、STORED AS和LOCATION语法在这里并不使用。因为我们是存储到Hbase中的，不需要再指定存储时行的格式和存储的位置，这些都是由storage-handler来处理的。
+4、建表时CLUSTEREDBY和SORTED BY 语法可以使用，但是没有效果。因为数据是要存储在Hbase中的。
+分区相关测试结果：
+在创建HBase表时，加入分区语法。提示执行成功。
+hive>CREATE TABLE test_hbase3(key int, value string)
+   > PARTITIONED BY(a string)
+   > STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+   > WITH SERDEPROPERTIES ("hbase.columns.mapping" =":key,cf1:val")
+   > TBLPROPERTIES ("hbase.table.name" ="aaa","hbase.table.name" = "abc"
+   > );
+OK
+Timetaken: 1.142 seconds
+插入数据的时候也提示成功。注：这里只能使用insert来插入数据，还不支持使用load。
+hive>insert overwrite table test_hbase3 PARTITION(a='1') select * from pokes;
+TotalMapReduce jobs = 2
+LaunchingJob 1 out of 2
+Numberof reduce tasks is set to 0 since there's no reduce operator
+StartingJob = job_201110280956_0007, Tracking URL =http://s12094:50030/jobdetails.jsp?jobid=job_201110280956_0007
+KillCommand = /home/hadoop/hadoop-0.20.2/bin/../bin/hadoopjob  -Dmapred.job.tracker=10.4.120.94:9001 -kill job_201110280956_0007
+2011-10-2816:37:41,134 Stage-1 map = 0%,  reduce = 0%
+2011-10-2816:37:44,167 Stage-1 map = 50%,  reduce = 0%
+2011-10-2816:37:45,186 Stage-1 map = 100%,  reduce = 0%
+2011-10-2816:37:48,209 Stage-1 map = 100%,  reduce = 100%
+EndedJob = job_201110280956_0007
+EndedJob = 467947979, job is filtered out (removed at runtime).
+Movingdata to: hdfs://s12094:9000/tmp/hive-hadoop/hive_2011-10-28_16-37-35_690_6394477055967985650/-ext-10000
+Loadingdata to table default.test_hbase3 partition (a=1)
+Partitiondefault.test_hbase3{a=1} stats: [num_files: 0, num_rows: 0, total_size: 0]
+Tabledefault.test_hbase3 stats: [num_partitions: 1, num_files: 0, num_rows: 0,total_size: 0]
+5Rows loaded to test_hbase3
+OK
+Timetaken: 12.933 seconds
+可以看到提示成功，并有5行数据插入了该表。
+hive>select * from test_hbase3;
+OK
+Timetaken: 0.125 seconds
+运行查询select*，提示成功，但查询不到数据。
+hive>select key,value,a from  test_hbase3;
+TotalMapReduce jobs = 1
+LaunchingJob 1 out of 1
+Numberof reduce tasks is set to 0 since there's no reduce operator
+StartingJob = job_201110280956_0011, Tracking URL =http://s12094:50030/jobdetails.jsp?jobid=job_201110280956_0011
+KillCommand = /home/hadoop/hadoop-0.20.2/bin/../bin/hadoopjob  -Dmapred.job.tracker=10.4.120.94:9001 -kill job_201110280956_0011
+2011-10-2816:56:22,169 Stage-1 map = 0%,  reduce = 0%
+2011-10-2816:56:25,187 Stage-1 map = 100%,  reduce = 0%
+2011-10-2816:56:28,204 Stage-1 map = 100%,  reduce = 100%
+EndedJob = job_201110280956_0011
+OK
+1      a       1
+2      b       1
+3      c       1
+4      d       1
+5      e       1
+Timetaken: 11.072 seconds
+但是其它的查询，能够正常的获取数据。
+分析原因：
+select*在普通表中是直接读取HDFS文件。在这里是直接从HBase进行查询。应该是查询成功了，但是hive并不会展示。
+其它情况需要运行mapreduce，就没有问题了。
+数据的加载与查询
+使用这样的方式创建的表，对于表的元数据的操作需要在hive中进行。对表数据的操作可以在hive中进行，也可以在Hbase中进行。比如插入数据。
+一般hive表加载数据有两种方式：load、insert。在hive中Hbase表只能使用insert语句来插入数据，而不支持load。
+
+hive>   insert overwrite table hbase_table_1 select * from pokes;
+
+Total  MapReduce jobs = 1
+
+Launching  Job 1 out of 1
+
+Number  of reduce tasks is set to 0 since there's no reduce operator
+
+Starting  Job = job_201110280956_0014, Tracking URL =  http://s12094:50030/jobdetails.jsp?jobid=job_201110280956_0014
+
+Kill  Command = /home/hadoop/hadoop-0.20.2/bin/../bin/hadoop  job  -Dmapred.job.tracker=10.4.120.94:9001 -kill job_201110280956_0014
+
+2011-10-28  17:55:40,338 Stage-0 map = 0%,  reduce = 0%
+
+2011-10-28  17:55:43,352 Stage-0 map = 50%,  reduce = 0%
+
+2011-10-28  17:55:44,358 Stage-0 map = 100%,  reduce = 0%
+
+2011-10-28  17:55:47,374 Stage-0 map = 100%,  reduce = 100%
+
+Ended  Job = job_201110280956_0014
+
+5 Rows  loaded to hbase_table_1
+
+OK
+
+Time taken:  12.929 seconds
+
+hive>  select * from hbase_table_1;
+
+OK
+
+1        a
+
+2        b
+
+3        c
+
+4        d
+
+5        e
+
+Time  taken: 0.117 seconds
+
+从Hbase中查询的结果如下
+
+hbase(main):031:0>  scan 'aaa'
+
+ROW                           COLUMN+CELL
+
+1                            column=cf1:val, timestamp=1319795730337,  value=a
+
+2                            column=cf1:val, timestamp=1319795730338,  value=b
+
+3                            column=cf1:val, timestamp=1319795730338,  value=c
+
+4                            column=cf1:val, timestamp=1319795732571,  value=d
+
+5                            column=cf1:val, timestamp=1319795732571,  value=e
+
+5  row(s) in 0.0180 seconds
+
+在Hbase中执行插入数据的操作如下：
+
+hbase(main):032:0>  put 'aaa','0','cf1:val','from hbase'
+
+0  row(s) in 0.0040 seconds
+
+hbase(main):033:0>  scan  'aaa'
+
+ROW                           COLUMN+CELL
+
+0                            column=cf1:val, timestamp=1319795845805, value=from  hbase
+
+1                            column=cf1:val, timestamp=1319795730337,  value=a
+
+2                            column=cf1:val, timestamp=1319795730338,  value=b
+
+3                            column=cf1:val, timestamp=1319795730338,  value=c
+
+4                            column=cf1:val, timestamp=1319795732571,  value=d
+
+5                            column=cf1:val, timestamp=1319795732571,  value=e
+
+6  row(s) in 0.0250 seconds
+
+这时再回到hive中进行查询，可以得到相同的结果
+
+hive>  select * from hbase_table_1;
+
+OK
+
+0        from hbase
+
+1        a
+
+2        b
+
+3        c
+
+4        d
+
+5        e
+
+Time  taken: 0.117 seconds
+
+不支持表的修改
+会提示不能修改非本地表。
+
+hive>  ALTER TABLE test_hbase3 ADD PARTITION (a = '2');
+
+FAILED:  Error in metadata: Cannot use ALTER TABLE on a non-native table
+
+FAILED:  Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask
+
+
+-------------------------------------------------------
+
+1.对于全表扫描
+（1）hive_on_hbase查询时候如果不设置catching，性能远远哪个比较好一些？
+（2）根据rowkey过滤，hive_on_hbase ，hive_on_hdfs哪一个更好一些？
+（3）设置了caching之后，二者哪一个更快一些？
+2.Hive over HBase原理是什么？
+3.在使用Hive over HBase，对HBase中的表做统计分析时候，需要特别注意几个方面？
+
+
+环境配置：
+hadoop-2.0.0-cdh4.3.0 (4 nodes, 24G mem/node)
+hbase-0.94.6-cdh4.3.0 (4 nodes,maxHeapMB=9973/node)
+hive-0.10.0-cdh4.3.0
+
+一、查询性能比较：
+    query1: 
+        select count(1) from on_hdfs;
+        select count(1) from on_hbase;
+    query2(根据key过滤)
+        select * from on_hdfs 
+            where key = '13400000064_1388056783_460095106148962';
+        select * from on_hbase 
+            where key = '13400000064_1388056783_460095106148962';
+    query3(根据value过滤)
+        select * from on_hdfs where value = 'XXX';
+        select * from on_hbase where value = 'XXX';
+
+    on_hdfs (20万记录，150M，TextFile on HDFS)
+    on_hbase(20万记录，160M，HFile on HDFS)
+
+     
+ 
+    
+on_hdfs (2500万记录，2.7G，TextFile on HDFS)
+on_hbase(2500万记录，3G，HFile on HDFS)
+
+    
+ 
+
+从上图可以看出：
+
+对于全表扫描，hive_on_hbase查询时候如果不设置catching，性能远远不及hive_on_hdfs；
+根据rowkey过滤，hive_on_hbase性能上略好于hive_on_hdfs，特别是数据量大的时候；
+设置了caching之后，尽管比不设caching好很多，但还是略逊于hive_on_hdfs；
+
+二、Hive over HBase原理
+    Hive与HBase利用两者本身对外的API来实现整合，主要是靠HBaseStorageHandler进行通信，利用HBaseStorageHandler，Hive可以获取到Hive表对应的HBase表名，列簇以及列，InputFormat和OutputFormat类，创建和删除HBase表等。
+    Hive访问HBase中表数据，实质上是通过MapReduce读取HBase表数据，其实现是在MR中，使用HiveHBaseTableInputFormat完成对HBase表的切分，获取RecordReader对象来读取数据。
+    对HBase表的切分原则是一个Region切分成一个Split,即表中有多少个Regions,MR中就有多少个Map；
+    读取HBase表数据都是通过构建Scanner，对表进行全表扫描，如果有过滤条件，则转化为Filter。当过滤条件为rowkey时，则转化为对rowkey的过滤；
+    Scanner通过RPC调用RegionServer的next()来获取数据；
+
+
+三、性能瓶颈分析1. Map Task
+    Hive读取HBase表，通过MR,最终使用HiveHBaseTableInputFormat来读取数据，在getSplit()方法中对HBase表进行切分，切分原则是根据该表对应的HRegion，将每一个Region作为一个InputSplit，即，该表有多少个Region,就有多少个Map Task；
+    每个Region的大小由参数hbase.hregion.max.filesize控制，默认10G，这样会使得每个map task处理的数据文件太大，map task性能自然很差；
+    为HBase表预分配Region，使得每个Region的大小在合理的范围；
+    下图是给该表预分配了15个Region，并且控制key均匀分布在每个Region上之后，查询的耗时对比，其本质上是Map数增加。
+
+    
+ 
+
+
+2. Scan RPC 调用：
+    在Scan中的每一次next()方法都会为每一行数据生成一个单独的RPC请求， query1和query3中，全表有2500万行记录，因此要2500万次RPC请求；
+
+    扫描器缓存（Scanner Caching）：HBase为扫描器提供了缓存的功能，可以通过参数hbase.client.scanner.caching来设置；默认是1；缓存的原理是通过设置一个缓存的行数，当客户端通过RPC请求RegionServer获取数据时，RegionServer先将数据缓存到内存，当缓存的数据行数达到参数设置的数量时，再一起返回给客户端。这样，通过设置扫描器缓存，就可以大幅度减少客户端RPC调用RegionServer的次数；但并不是缓存设置的越大越好，如果设置的太大，每一次RPC调用将会占用更长的时间，因为要获取更多的数据并传输到客户端，如果返回给客户端的数据超出了其堆的大小，程序就会终止并跑出OOM异常；
+    所以，需要为少量的RPC请求次数和客户端以及服务端的内存消耗找到平衡点。
+
+    rpc.metrics.next_num_ops
+    未设置caching,每个RegionServer上通过next()方法调用RPC的次数峰值达到1000万：
+
+ 
+    设置了caching=2000，每个RegionServer上通过next()方法调用RPC的次数峰值只有4000：
+
+ 
+    设置了caching之后，几个RegionServer上的内存消耗明显增加：
+
+ 
+
+    扫描器批量（Scanner Batch）：缓存是面向行一级的操作，而批量则是面向列一级的操作。批量可以控制每一次next()操作要取回多少列。比如，在扫描器中设置setBatch(5),则一次next()返回的Result实例会包括5列。
+    RPC请求次数的计算公式如下：
+RPC请求次数 = 
+（表行数 * 每行的列数）/ Min(每行的列数，批量大小)  / 扫描器缓存
+因此，在使用Hive over HBase，对HBase中的表做统计分析时候，需要特别注意以下几个方面：
+1. 对HBase表进行预分配Region，根据表的数据量估算出一个合理的Region数；
+2. rowkey设计上需要注意，尽量使rowkey均匀分布在预分配的N个Region上；
+3. 通过set hbase.client.scanner.caching设置合理的扫描器缓存；
+4. 关闭mapreduce的推测执行：
+   set mapred.map.tasks.speculative.execution = false;
+   set mapred.reduce.tasks.speculative.execution = false;

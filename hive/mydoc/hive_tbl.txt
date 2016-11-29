@@ -1,0 +1,224 @@
+Hive学习之修改表、分区、列
+
+修改表的语句允许改变现有表的结构，通过该语句可以增加列/分区，修改SerDe，增加表和SerDe的属性或者重命名表。与之类似，修改分区的语句可以改变指定分区的属性。
+
+重命名表
+重命名表的语句如下：
+ALTER TABLE table_name RENAME TO new_table_name
+修改表属性
+修改表属性的语句如下：
+ALTER TABLE table_name SET TBLPROPERTIES (property_name = property_value, property_name = property_value,... )
+使用该语句可以增加表的元数据，last_modified_by, last_modified_time属性自动被添加和管理，可以使用DESCRIBE EXTENDED table_name查询新增的表属性。
+
+修改表注释
+要修改表的注释，只需要使用上面介绍的修改表属性语句，将property_name指定为'comment' 属性即可：
+
+ALTER TABLE table_name SET TBLPROPERTIES('comment' = new_comment);
+增加SerDe属性
+增加SerDe属性的语句如下：
+
+ALTER TABLE table_name SET SERDE serde_class_name [WITH SERDEPROPERTIES serde_properties]
+ALTER TABLE table_name SET SERDEPROPERTIES
+(property_name = property_value,property_name = property_value, ... )
+该语句允许向SerDe对象增加自定义的元数据。SerDe属性在SerDe被Hive初始化时传递给表的SerDe。
+
+修改表的存储属性
+ALTER TABLE table_name CLUSTEREDBY (col_name, col_name, ...) [SORTED BY (col_name, ...)] INTO num_buckets BUCKETS
+该语句改变表的物理存储属性。
+
+需要注意的时，上述修改表的语句仅修改表的Hive的元数据，不会重新组织或者重新格式化现存数据，用户需要确定实际的数据布局符合元数据的定义。
+
+新增分区
+新增分区的语句为：
+
+ALTER TABLEtable_name ADD [IF NOT EXISTS] PARTITION partition_spec[LOCATION 'location1'] partition_spec [LOCATION 'location2'] ...
+
+partition_spec:
+  :(partition_col = partition_col_value, partition_col = partiton_col_value, ...)
+特别地，下面的例子将失败且不会报错，无论指定哪个分区，所有的查询都将在分区dt='2008-08-08'上执行：
+
+ALTER TABLE page_view ADD PARTITION (dt='2008-08-08', country='us')
+location '/path/to/us/part080808' PARTITION (dt='2008-08-09',country='us') location '/path/to/us/part080809';
+假设表不能存在分区而执行新增分区的操作将会提示错误信息：
+
+hive> alter tabletable_properties add partition (address='china');
+FAILED:SemanticException table is not partitioned but partition spec exists:{address=china}
+这是由于在新建表的时候，并没有创建分区列address，所以只有在存在分区列的表上执行增加分区的操作，才会成功。
+
+重命名分区
+重命名分区的语句如下：
+
+ALTER TABLE table_name PARTITION partition_spec RENAME TO PARTITION partition_spec;
+partition_spec:
+  :(partition_col = partition_col_value, partition_col = partiton_col_value, ...)
+
+示例代码如下：
+
+hive> show partitions people;
+OK
+department=1/sex=0/howold=23
+Time taken:0.349 seconds, Fetched: 1 row(s)
+hive> altertable people partition(department='1',sex='0',howold=23) rename to partition(department='2',sex='1',howold=24);
+OK
+Time taken:2.005 seconds
+hive> showpartitions people;
+OK
+department=2/sex=1/howold=24
+Time taken:0.271 seconds, Fetched: 1 row(s)
+交换分区
+交换分区的语句如下：
+
+ALTER TABLE table_name_1 EXCHANGE PARTITION (partition_spec) WITH TABLE table_name_2;
+该语句允许将一个分区中的数据移动另一个拥有相同schema但没有那个分区的表中。
+
+恢复分区（MSCKREPAIR TABLE）
+Hive在元存储中为每个表存储了一个分区列表，然而如果新分区直接添加到HDFS中（使用hadoop fs –put），Hive不会知道这些分区，除非在每个新添加的分区上执行ALTER TABLEtable_name ADD PARTITION命令。为了避免重复执行上述命令，可以使用如下的命令：
+
+MSCK REPAIR TABLE table_name;
+该语句将把存在于HDFS上但不在元存储上的分区添加到元存储中，示例如下：
+
+hive> dfs -mkdir /user/hive/warehouse/learning.db/people/department=1/sex=0/howold=23;
+hive> show partitions people;
+OK
+department=2/sex=1/howold=24
+Time taken:0.192 seconds, Fetched: 1 row(s)
+hive> msck repair table people;
+OK
+Partitions notin metastore:     people:department=1/sex=0/howold=23
+Repair: Addedpartition to metastore people:department=1/sex=0/howold=23
+Time taken:0.943 seconds, Fetched: 2 row(s)
+hive> show partitions people;
+OK
+department=1/sex=0/howold=23
+department=2/sex=1/howold=24
+Time taken:0.397 seconds, Fetched: 2 row(s)
+删除分区
+删除分区的语句为：
+
+ALTER TABLE table_name DROP [IF EXISTS] PARTITION partition_spec,PARTITION partition_spec,...
+可以使用上述语句删除表的分区，该语句将会删除指定分区的数据和元数据。对于受NO DROP CASCADE的表，可以使用IGNORE PROTECTION删除指定的分区或一组分区，该语句如下：
+
+ALTER TABLE table_name DROP [IF EXISTS] PARTITION partition_spec IGNORE PROTECTION;
+删除分区的例子如下，从该例子可以发现，当删除并不存在的分区时不会提示错误信息。
+
+hive> show partitions people;
+OK
+department=1/sex=0/howold=23
+department=2/sex=1/howold=24
+Time taken:0.397 seconds, Fetched: 2 row(s)
+hive> alter table people drop partition (department='2',sex='2',howold=24);
+OK
+Time taken:1.596 seconds
+hive> show partitions people;
+OK
+department=1/sex=0/howold=23
+department=2/sex=1/howold=24
+Time taken:0.227 seconds, Fetched: 2 row(s)
+hive> alter table people drop partition (department='2',sex='1',howold=24);
+Dropped the partition department=2/sex=1/howold=24
+OK
+Time taken:2.267 seconds
+hive> show partitions people;
+OK
+department=1/sex=0/howold=23
+Time taken:0.191 seconds, Fetched: 1 row(s)
+解档/归档分区
+ALTER TABLE table_name ARCHIVE PARTITION partition_spec;
+ALTER TABLE table_name UNARCHIVE PARTITION partition_spec;
+Hive中的归档移动分区中的文件到Hadoop归档中（HAR），该语句只会减少文件的数量，但不提供压缩。
+
+修改表/分区的文件格式
+ALTER TABLE table_name [PARTITION partitionSpec] SET FILEFORMAT file_format
+可以使用上述语句修改表或者分区的文件格式，Hive支持的文件格式有：SEQUENCEFILE、TEXTFILE、RCFILE 、ORC和INPUTFORMAT input_format_classnameOUTPUTFORMAT output_format_classname，默认的文件格式为TEXTFILE，由配置参数hive.default.fileformat指定。TEXTFILE指以纯文本文件存储数据，在数据需要压缩时使用SEQUENCEFILE，使用INPUTFORMAT和OUTPUTFORMAT指定输入格式和输出格式的类名，比如'org.apache.hadoop.hive.contrib.fileformat.base64.Base64TextInputFormat'。
+
+修改表/分区的文件位置
+ALTER TABLE table_name [PARTITIONpartitionSpec] SET LOCATION "newlocation"
+修改表/分区的Touch
+TOUCH读元数据，然后写回。这能够触发前置或者后者hook的执行，假设是存在一个记录表或者分区修改的hook和直接修改HDFS上文件的外部脚本。由于外部脚本在Hive之外修改文件，修改不会被hook所记录，这是外部脚本可以调用TOUCH以触发hook，然后标记上述表或者分区为已修改的。修改表或者分区的TOUCH语句如下：
+
+ALTER TABLE table_name TOUCH [PARTITION partitionSpec];
+修改表/分区的保护
+可以在表级或者分区级设置数据保护。启用NO_DROP将保护表或者分区被删除，启用OFFLINE将阻止表或者分区中的数据被查询，但元数据依然可以被访问。如果表中的任何分区启用了NO_DROP，该表也不能被删除。修改表或者分区保护的语句如下:
+
+ALTER TABLE table_name [PARTITION partition_spec] ENABLE|DISABLE NO_DROP;
+ALTER TABLE table_name [PARTITION partition_spec] ENABLE|DISABLE OFFLINE;
+演示代码及结果如下：
+
+hive> alter table iis enable no_drop;
+OK
+Time taken: 0.792seconds
+hive> drop tableiis;
+FAILED: ExecutionError, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask. Table iis isprotected from being dropped
+hive> alter tableiis enable offline;
+OK
+Time taken: 0.439seconds
+hive> select *from iis;
+FAILED:SemanticException [Error 10113]: Query against an offline table or partitionTable iis
+hive> alter tablepeople partition (department='1', sex='0', howold=23) enable no_drop;
+OK
+Time taken: 1.23 seconds
+hive> drop table people;
+FAILED: ExecutionError, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask. Table peoplePartitiondepartment=1/sex=0/howold=23 is protected from being dropped
+修改列名/类型/位置/注释
+下面的语句允许修改列名称、列类型、列注释、列位置。该语句仅修改Hive元数据，不会触动表中的数据，用户需要确定实际的数据布局符合元数据的定义。
+
+ALTER TABLE table_name CHANGE [COLUMN] col_old_name col_new_name column_type [COMMENTcol_comment] [FIRST|(AFTER column_name)]
+示例代码及结果如下：
+
+hive> alter table people change telephone mobile string comment 'change column name' first;
+OK
+Time taken: 0.66seconds
+hive>describe people;
+OK
+mobile                string                   changecolumn name
+name                string
+age                   int
+birthday                date
+address                string
+department             string
+sex                   string
+howold              int
+# PartitionInformation
+# col_name                  data_type               comment
+            department              string
+sex                   string
+howold              int
+ 增加/替换列
+增加或者替换列的语句如下，其中ADD COLUMNS在现有列之后但在分区列之前增加新列，REPLACE COLUMNS先删除现存列，然后再增加新列。替换列只能在表使用自带SerDe（DynamicSerDe,MetadataTypedColumnsetSerDe, LazySimpleSerDe and ColumnarSerDe）时使用。
+
+ALTER TABLE table_name ADD|REPLACE COLUMNS (col_name data_type[COMMENT col_comment], ...)
+REPLACE COLUMNS也可以用于删除列，例如：
+
+hive> alter table test add columns (e int comment 'Add new column e');
+OK
+Time taken: 0.395seconds
+hive> describetest;
+OK
+a                   int
+b                   int
+c                   int
+e                   int                     Add new column e
+d                   int
+
+# PartitionInformation
+# col_name                  data_type               comment
+
+d                   int
+Time taken: 0.209seconds, Fetched: 10 row(s)
+hive> alter table test replace columns (a1 string, b1 string, c1 string);
+OK
+Time taken: 0.994seconds
+hive> describe test;
+OK
+a1                  string
+b1                  string
+c1                  string
+d                   int
+
+# PartitionInformation
+# col_name                  data_type               comment
+
+d                   int
+Time taken: 0.232seconds, Fetched: 9 row(s)
+需要注意的是该删除仅修改表的schema，但不删除数据。
+

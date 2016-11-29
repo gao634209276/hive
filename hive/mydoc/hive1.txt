@@ -1,0 +1,252 @@
+hive-cli
+	hive> set hive.cli.print.current.db=true;
+	hive (default)> set hive.cli.print.header=true;
+	hive (default)> select * from user_info;
+	OK
+	user_info.id	user_info.account	user_info.name	user_info.age
+	Time taken: 1.09 seconds
+	hive (default)>
+bin/hive --service hwi
+	hadoop:9999/hwi
+hive --service hiveserver2
+	//private static String Driver = "org.apache.hadoop.hive.jdbc.HiveDriver";
+	private static String Driver = "org.apache.hive.jdbc.HiveDriver";
+	//private static String URL = "jdbc:hive://hadoop:10000/default";
+	private static String URL = "jdbc:hive2://hadoop:10000/default";
+		Class.forName(Driver);
+		Connection conn = DriverManager.getConnection(URL,"","");
+		Statement stat = conn.createStatement();
+		//String sql = "show tables";
+		String sql = "select * from user_info";
+		ResultSet res = stat.executeQuery(sql);
+
+hive数据类型
+-------------
+	基本数据类型boolean,int,bigint,float,double,string,ts,date,binary
+	集合类型:Array,Map,Struct
+hive-文件格式
+----------------------
+	textfile,Sequencefile,Rcfile
+	扩展接口
+	默认的文件读取方式,自定义inputformat,自定义serde(使用了hadoop的输入输出流)
+	RCFile
+	列转化为行,然后分组压缩
+
+	1.textfile
+	textfile为默认格式
+	存储方式：行存储
+	磁盘开销大 数据解析开销大
+	压缩的text文件 hive无法进行合并和拆分
+	2.sequencefile
+	二进制文件,以<key,value>的形式序列化到文件中
+	存储方式：行存储
+	可分割 压缩
+	一般选择block压缩
+	优势是文件和Hadoop api中的mapfile是相互兼容的。
+	3.rcfile
+	存储方式：数据按行分块 每块按照列存储
+	压缩快 快速列存取
+	读记录尽量涉及到的block最少
+	读取需要的列只需要读取每个row group 的头部定义。
+	读取全量数据的操作 性能可能比sequencefile没有明显的优势
+	4.orc
+	存储方式：数据按行分块 每块按照列存储
+	压缩快 快速列存取
+	效率比rcfile高,是rcfile的改良版本
+	5.自定义格式
+	用户可以通过实现inputformat和 outputformat来自定义输入输出格式。
+	总结：
+	textfile 存储空间消耗比较大，并且压缩的text 无法分割和合并 查询的效率最低,可以直接存储，加载数据的速度最高
+	sequencefile 存储空间消耗最大,压缩的文件可以分割和合并 查询效率高，需要通过text文件转化来加载
+	rcfile 存储空间最小，查询的效率最高 ，需要通过text文件转化来加载，加载的速度最低
+	个人建议：text,seqfile能不用就尽量不要用  最好是选择orc
+
+表创建
+-------------
+	create [external] table [if not exists] [db_name.]talbe_name
+	[(col_name data_type[COMMENT col_comment],...]
+	[partitioned by (col_name data_type [comment col_comment],..)]
+	[clustered by (col_name,col_name,...) [sorted by (col_name [asc|desc],...)] into num_buckets BUCKETS]
+	[
+	[ROW FORMAT row_format]
+	[fields terminated by '']
+	[lines terminated by '']
+	[STORED AS file_format]
+	| STORED BY 'storage.handler.class.name' [WITH SERDEPROPERTIES(...)]
+	(...)]
+	]
+	[location hdfs_path]
+	[tblproperties (property_name=property_value,...)]
+	[AS select_statement]
+练习:创建表
+------------------
+drop table testtable;
+create table if not exists testtable(
+name string comment 'name value',
+addr string comment 'addr value')
+row format delimited fields terminated by '\t' lines terminated by '\n' stored as textfile;
+show tables;
+show create table testtable;
+describe extended testtable;
+describe formatted testtable;
+数据加载
+----------------
+data
+table1	test1
+table2	test2
+
+load data local inpath'/home/hadoop/test/data' overwrite into table testtable;
+load data local inpath'/home/hadoop/test/data' into table testtable;
+select * from testtable;
+外部表
+------------------
+drop table if exists testext;
+create table if not exists testext(
+name string comment 'name value',
+addr string comment 'addr value')
+row format delimited fields terminated by '\t' lines terminated by '\n' stored as textfile
+location '/data/';
+drop table if exists employees;
+create external table if not exists employees (
+name string comment 'name value',
+salary float,
+subordinates array<string>,
+deductions map<string,float>,
+address struct<street:string, city:string, state:string, zip:int> comment 'addr value')
+row format delimited fields terminated by '\t'
+collection items terminated by ','
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile
+location '/data/';
+describe formatted employees;
+data
+wang	123	a1,a2,a3	k1:1,k2:2,k3:3	s1,s2,s3,4
+liu	456	a4,a5,a6	k4:4,k5:5,k6:6	s4,s5,s6,6
+zhang	789	a7,a8,a9	k7:7,k8:8,k9:9	s7,s8,s9,9
+
+load data local inpath'/home/hadoop/test/data' overwrite into table employees;
+select * from employees;
+查询subordinates字段数组索引为1的元素值
+select subordinates[1] from employees;
+查询deductions字段map中k为k2的值
+select deductions["k2"] from employees;
+查询address字段的city值
+select address.city from employees;
+
+建表其他方式
+create table testext_c like testext;
+create table testext_cc as select name,addr from testext;
+不同文件读取对比
+--------------------
+	stored as textfile
+	直接查看hdfs
+	hadoop fs -text
+	stored as sequencefile
+	hadoop fs -text
+	stored as rcfile
+	hive-service rcfilecat path
+	stored as inputformat 'class'//自定义输入输出流
+	outformat 'class'
+练习
+----------------------
+create table test_txt(name string,val string) stored as textfile;
+desc formatted test_txt;
+InputFormat:    org.apache.hadoop.mapred.TextInputFormat
+OutputFormat:   org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+
+create table test_seq(name string,val string) stored as sequencefile;
+InputFormat:    org.apache.hadoop.mapred.SequenceFileInputFormat
+OutputFormat:  	org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat
+
+hive> create table test_rc(name string,val string) stored as rcfile;
+InputFormat:    org.apache.hadoop.hive.ql.io.RCFileInputFormat
+OutputFormat:   org.apache.hadoop.hive.ql.io.RCFileOutputFormat
+
+自定义inputformat
+hive>add jar /opt/app/jar/docFileInputFormat.jar;
+或者cp /opt/app/jar/docFileInputFormat.jar /opt/single/hive-1.2.1/lib/
+drop table testinputformat;
+create table if not exists testinputformat(
+name string comment 'name value',
+addr string comment 'addr value')
+row format delimited fields terminated by '\t' lines terminated by '\n'
+stored as inputformat 'com.peixun.inputformat.DocFileInputFormat'
+outputformat 'org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat';
+
+desc formatted testinputformat;
+InputFormat:    com.peixun.inputformat.DocFileInputFormat
+OutputFormat: 	org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat
+
+Hive使用SerDe(Serializer/Deserializer) java面向对象<--->数据结构化,序列化存储
+------------------------
+	HDFS文件-->InputFileFormat--><k,v>-->Deserizlizer-->Row对象
+	Row对象-->Serizlizer--><k,v>-->OutputFileFormat-->HDFS文件
+	自定义SerDe,使用
+	---------------------
+create table apachelog(
+host string,identity string,users string,time string,request string,status string,size string,referer string,agent string)
+row format serde 'org.apache.hadoop.hive.serde2.RegexSerDe'
+with serdeproperties("input.regex" = "([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([0-9]*) ([0-9]*) ([^ ]*) ([^ ]*)")
+stored as textfile;
+hive> desc formatted apachelog;
+SerDe Library:     org.apache.hadoop.hive.serde2.RegexSerDe
+InputFormat:    org.apache.hadoop.mapred.TextInputFormat
+OutputFormat:  	org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+data
+10.10.1.1 test user - post 202 500 refer agent
+10.10.1.2 test root - get 201 501 refer agent
+hive> load data local inpath'/home/hadoop/test/data' overwrite into table apachelog;
+
+Hive分区表
+-----------------------------
+	分区:在hive Select查询中一般会扫描整个表内容,会小号到很多时间做没必要工作,分区表指的是在创建表是指定partition 的分区空间
+	分区语法
+create external table if not exists employees (
+name string, salary float,
+subordinates array<string>,
+deductions map<string,float>,
+address struct<street:string, city:string, state:string, zip:int>)
+partitioned by (dt string,type string)
+row format delimited fields terminated by '\t'
+collection items terminated by ','
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile;
+
+hive> desc formatted employees;
+# Partition Information
+# col_name            	data_type           	comment
+dt                  	string
+type                	string
+	Hive分区表操作
+	----------------------
+增加分区
+alter table employees
+add if not exists partition(dt = '20160101',type = 'test');
+alter table employees
+add if not exists partition(dt = '20160102',type = 'test');
+删除分区
+alter table employees
+drop if exists partition (dt = '20160102',type = 'test');
+
+	Hive分桶
+--------------------------------
+	分桶:对于每一个表(table)或者分区,Hive可以进一步组织成桶,也就是说桶是更为细粒度的数据范围划分
+	Hive是针对某一列进行分桶,采用对列值哈希,然后除以分桶的个数求余的方式决定该条记录存放在哪个桶当中
+	获得更高的查询处理效率,使取样(sampling)更高效
+Set hive.enforce.bucketing=true;
+drop table if exists bucketed_user;
+create table if not exists bucketed_user(
+id string, name string)
+clustered by(id) sorted by(name) into 4 buckets
+row format delimited fields terminated by '\t' stored as textfile;
+insert overwrite table bucketed_user select name,addr from testext;
+设为4个桶,插入数据后,会在分区目录下生成是个文件
+
+Hive基本使用-查询
+---------------------
+	基本语法
+select [all|distinct] select_expr,select_expr,...
+from table_name
+[where where_condition]

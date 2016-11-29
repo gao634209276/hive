@@ -1,0 +1,21 @@
+
+Hive HA使用说明
+
+
+hive让大数据飞了起来，不再需要专人写MR。平常我们都可以用基于thrift的任意语言来调用hive。
+不过爱恨各半，hive的thrift不稳定也是出了名的。很容易就出问题，让人无计可施。唯一的办法就是不断kill,不断restart。
+当然，我们可以用haproxy来解决这个问题，关键，haproxy不管hive是否逻辑可用，不能执行逻辑的hive也“死马当活马”。
+当然，搞的好的可以用 zookeeper,不过，它太“重”，而且不管hive的重启。
+
+         Hive HA横空出世。只要指明它可以管理的服务器ip,端口，启动一个主控服务器，在其他服务器上启动节点服务，它就一切搞定。
+        Hive HA原理是:
+       将若干hive 实例纳入一个资源池，然后对外提供一个唯一的接口，进行proxy relay。
+      对于程序开发人员，就把它认为是一台超强“hive"就可以。每次它接收到一个HIVE查询连接后，都会轮询资源池里可用的hive 资源。
+这样，能充分使用每个hive server，减少压力。在拿到hive 连接后，Hive HA会首先进行逻辑可用测试,这个逻辑规则可自行配置。
+      如果逻辑可用，则直接把客户端的HIVE 查询连接 relay到该hive server。
+     若逻辑不可用，则将该hive server放入黑名单，然后继续读取池里其他hive server进行连接测试。
+    Hive Ha每隔一段时间(可配置），对黑名单中的hive server进行处理，通过和节点管理服务器通讯，重启该hive server。如果
+重启后可用，则将该hive从黑名单中移除，加入资源池。
+
+Hive HA地址:
+https://github.com/foxmoon/HiveHa

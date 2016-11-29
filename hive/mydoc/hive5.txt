@@ -1,0 +1,234 @@
+正则表达式
+函数分类
+	内置函数
+		简单函数-map阶段
+		聚合函数-reduce阶段
+		集合函数-map阶段
+		特殊函数
+	自定义函数
+		UDF-map阶段
+		UDAF-reduce阶段
+cli命令
+	显示当前回话有多少个函数可用
+		show functions;
+	显示函数的描述信息
+		desc function concat; //显示concat函数描述
+	显示函数的扩展描述信息
+		desc function extended concat;
+简单函数
+----------------
+	函数的计算粒度-单条记录
+	关系运算
+	数学运算
+	逻辑运算
+	数值运算
+	类型运算
+	日期运算
+	条件运算
+	字符串运算
+	统计函数
+
+集合函数
+------------------
+	复合类型构建
+	复杂类型访问
+	复杂类型长度
+
+特殊函数
+----------------
+	窗口函数
+		应用场景
+			用于分区排序
+			动态group by
+			Top N
+			累计计算
+			层次查询
+		Windowing functions
+			lead,lag,first_value,last_value
+	分析函数
+		The OVER clause(over子句)
+			count,sum,min,max,avg
+		Analytics funcitons
+			rank,row_number,dense_rank,cume_dist,percent_rank,ntile
+	混合函数
+		//使用java的一些类和函数作为hive的方法和函数
+		java_method(class,method[,arg1[,arg2..]])
+		reflect(class,method[,arg1[,arg2..]])	//反射获取java提供方法
+		hash(a1[,a2..])	//根据参数hash计算
+UDTF(用户user定义def表table函数function)
+----------------------
+	表函数
+		lateralView:lateral view udtf(expression) tableAlias as columnAlias(',' columnAlias)*fromClause: from baseTable(lateralView)*
+		例 explode函数 //可以讲map一行转换为多行
+
+===========================================================
+函数使用练习
+----------------
+create table winfunc(
+id int, money double,type string)
+row format delimited fields terminated by '\t';
+101	100	ABC
+101	130	BCD
+102	100	CDE
+102	200	ABC
+102	300	ABD
+103	400	ABE
+103	150	CDE
+103	60	BCE
+load data local inpath'/home/hadoop/test/data' overwrite into table winfunc;
+and ar 优先级
+要求:显示101和102中工资为100的记录
+select id,money from winfunc where id="101" or id="102" and money = "100";
+101	100.0
+101	130.0
+102	100.0
+原因是and优先级高于or,查询语句先执行and,然后or,保证顺序加()
+select id,money from winfunc where (id="101" or id="102") and money = "100";
+cast(money as bigint)
+select cast (1.5 as int) from winfunc;
+select if (2>1,id,money) from winfunc;
+case when .. then .. else .. end
+select case when id='101' then 'V1' when id='102' then 'V2' else 'V3' end from winfunc;
+get_json_object//实际工作中数据转换为json格式,()内为第一个单数为json的值,可能是表中的值,第二个是路径,$.表示根,name为属性名,这里name的属性值jack.
+用于数据清洗过程,正则表达式,判断是否为json格式,不是过滤掉
+select get_json_object('{"name":"jack","age":"20"}','$.name') from winfunc limit 1;
+解析url
+select parse_url('http://fanyi.baidu.com/?aldtype=85#en/zh/hello','HOST') from winfunc limit 1;
+字符串连接函数concat
+concat(string A,string B...)返回值:String
+select concat(type,'123') from winfunc limit 1;
+select concat_ws('-',type,'123') from winfunc limit 1;
+select concat_ws('-',split(type,'')) from winfunc limit 1;//split()返回值array
+collect_set()/collect_list()//返回值为array
+select collect_set(id) from winfunc; //set有去重作用
+select collect_list(id) from winfunc;
+select sum(money),count(*) from winfunc;
+
+first_value(),last_value()
+select id,money,first_value(money) over (partition by id order by money) from winfunc;
+101	100.0	100.0
+101	130.0	100.0
+102	100.0	100.0
+102	200.0	100.0
+102	300.0	100.0
+103	60.0	60.0
+103	150.0	60.0
+103	400.0	60.0
+select id,money,first_value(money) over (partition by id order by money rows between 1 preceding and 1 following) from winfunc;
+rows划分范围,1 preceding前一行,1 following后一行,整个查询意思是:按照id进行partition,在每个partition中以money进行order,排序以后,按区间计算money的first_value()也就最小值,也就是在该分区中,计算此行最小的money是通过比较本行,1 preceding和1 following三行,取最小的值
+101	100.0	100.0
+101	130.0	100.0
+102	100.0	100.0
+102	200.0	100.0
+102	300.0	200.0
+103	60.0	60.0
+103	150.0	60.0
+103	400.0	150.0
+select id,money,lead(money,2) over (order by money) from winfunc;
+lead是取出当前行money字段之后第n行的值,这里先经过order by,(order by是全局排序,所以不同hash值的记录间也要比较,没有partation by),也就是比较较大值.
+与lead相反的取值是lag(col,n)函数
+103	60.0	100.0
+102	100.0	130.0
+101	100.0	150.0
+101	130.0	200.0
+103	150.0	300.0
+102	200.0	400.0
+102	300.0	NULL
+103	400.0	NULL
+rank()over (partition by order by ) 排序
+先通过id分区,在每个分区内按照money大小进行(默认升序)排序
+select id,money,rank() over(partition by id order by money) from winfunc;
+101	100.0	1
+101	130.0	2
+102	100.0	1
+102	200.0	2
+102	300.0	3
+103	60.0	1
+103	150.0	2
+103	400.0	3
+dense_rank()over (partition by order by )
+select id,money,dense_rank() over(partition by id order by money) from winfunc;
+此排序会将money值相同的视为同一序号,不间断排序
+cume_dist() over (partition by order by )
+((相同值最大行号)/(行数)) * 每个值的个数,与前面的累加
+select id,money,cume_dist() over(partition by id order by money) from winfunc;
+101	100.0	0.5		// (相同值100最大行号1,该分区行数2)=1/2=0.5
+101	130.0	1.0
+102	100.0	0.3333333333333333
+102	200.0	0.6666666666666666
+102	300.0	1.0
+103	60.0	0.3333333333333333
+103	150.0	0.6666666666666666
+103	400.0	1.0
+percent_rank() over (partition by id order by money)
+((相同值最小行号-1)/(行数-1))
+select id,money, percent_rank() over (partition by id order by money)from winfunc;
+101	100.0	0.0
+101	130.0	1.0
+102	100.0	0.0
+102	200.0	0.5
+102	300.0	1.0
+103	60.0	0.0
+103	150.0	0.5
+103	400.0	1.0
+ntile(2) over (order by money desc nulls last)分片
+按照分区/或者所有数据 进行分片(2)为分两片,
+select id,money,ntile(2) over (order by money desc )from winfunc;
+103	400.0	1
+102	300.0	1
+102	200.0	1
+103	150.0	1
+101	130.0	2
+102	100.0	2
+101	100.0	2
+103	60.0	2
+----------------------------
+混合函数(利用java类,java函数)
+java_method(class,method[,arg1[,arg2..]])
+reflect(class,method[,arg1[,arg2..]])	//反射获取java提供方法
+hash(a1[,a2..])	//根据参数hash计算
+根据id,转换为double,利用java的sqrt函数,求平方跟
+select java_method("java.lang.Math","sqrt",cast(id as double)) from winfunc;
+10.04987562112089
+10.04987562112089
+10.099504938362077
+10.099504938362077
+10.099504938362077
+10.14889156509222
+10.14889156509222
+10.14889156509222
+--------------------------
+UDTF表函数
+lateralView:lateral view udtf(expression) tableAlias as columnAlias(',' columnAlias)*fromClause: from baseTable(lateralView)*
+例 explode函数 //可以讲map一行转换为多行
+将winfunc表type字段按照B切分,生成字符串数组,作为explde函数参数,按照数组元素将原来的一行转换为多行
+select id, adid from winfunc lateral view explode (split(type,'B')) tt as adid;
+101	A
+101	C
+101
+101	CD
+102	CDE
+102	A
+102	C
+102	A
+102	D
+103	A
+103	E
+103	CDE
+103
+103	CE
+=============================
+正则表达式
+A like B, 字符"_"表示任意单个字符,而字符"%"表示任意数量的字符
+A rlike B
+select 1 from dual where 'footbar' rlike '^f.*r$';//mysql通用
+select 1 from winfunc where 'footbar' rlike '^f.*r$'; //from表必须在hive中存在,字符串要用''
+regexp_replace(),匹配替换
+select regexp_replace('footbar','oo|ar','')from winfunc;
+regexp_extract()
+.*\\|贪婪匹配表达式,.*任意多个,\特殊含义,\|将|转义为普通字符,整体含义:
+匹配到最后的一个能匹配的字符
+select regexp_extract(979|7.10.80|8684,.*\\|(.*),1) from winfunc limit 1;
+.*\\|表示匹配979|7.10.80|8684,一直到最后的|为止.
+(.*?)\\|匹配到第一个就停止继续匹配,只匹配一个
+select regexp_extract('979|7.10.80|8684','(.*?)\\|(.*)',1) from winfunc limit 1;

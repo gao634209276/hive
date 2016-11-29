@@ -1,0 +1,128 @@
+127.0.0.1   localhost
+192.168.202.4 master master.dragon.org
+192.168.202.5 slave1 slave1.dragon.org
+192.168.202.6 slave2 slave2.dragon.org
+192,168.202.7 slave3 slave3.dragon.org
+
+
+//java-1.7.0-openjdk-1.7.0.9-2.3.4.1.el6_3.x86_64
+ssh-keygen -t rsa
+ssh-copy-id -i id_rsa.pub master.dragon.org
+ssh-copy-id -i id_rsa.pub slave1.dragon.org
+ssh-copy-id -i id_rsa.pub slave2.dragon.org
+ssh-copy-id -i id_rsa.pub slave3.dragon.org
+##env
+export JAVA_HOME=/usr/java/jdk1.7.0_80/
+##core
+<configuration>
+	<property>
+		<name>fs.default.name</name>
+		<value>hdfs://master.dragon.org:9000</value>
+	</property>
+	<property>
+		<name>hadoop.tmp.dir</name>
+		<value>/opt/data/tmp</value>
+	</property>
+
+</configuration>
+##hdfs
+<configuration>
+	<property>
+		<name>dfs.replication</name>
+		<value>3</value>
+	</property>
+</configuration>
+##mapred
+
+<configuration>
+	<property>
+		<name>mapred.job.tracker</name>
+		<value>master.dragon.org:9001</value>
+	</property>
+</configuration>
+##master
+master.dragon.org
+##slave
+slave1.dragon.org
+slave2.dragon.org
+slave3.dragon.org
+
+##hive安装
+export HIVE_HOME=/opt/modules/hive-0.9.0-bin
+export HADOOP_HOME=/opt/modules/hadoop-0.20.2
+vi hive-config.sh
+export JAVA_HOME=/usr/jdk1.7.0_80
+export HIVE_HOME=/opt/modules/hive-0.9.0-bin
+export HADOOP_HOME=/opt/modules/hadoop-0.20.2
+[hadoop@h91 conf]$ cp hive-default.xml.template hive-default.xml
+[hadoop@h91 conf]$ cp hive-default.xml.template hive-site.xml
+
+
+
+##mysql安装
+cmake \
+-DCMAKE_INSTALL_PREFIX=/usr/local/mysql \
+-DMYSQL_UNIX_ADDR=/usr/local/mysql/mysql.sock \
+-DMYSQL_DATADIR=/usr/local/mysql/data \
+-DDEFAULT_CHARSET=utf8 \
+-DDEFAULT_COLLATION=utf8_general_ci \
+-DMYSQL_TCP_PORT=3306 \
+-DWITH_INNOBASE_STORAGE_ENGINE=1 \
+-DWITH_ARCHIVE_STORAGE_ENGINE=1 \
+-DWITH_BLACKHOLE_STORAGE_ENGINE=1 \
+-DWITH_PARTITION_STORAGE_ENGINE=1
+##make失败
+make clean
+rm -f CMakeCache.txt
+rm -rf /etc/my.cnf
+##make
+make && make install
+./scripts/mysql_install_db --user=mysql --basedir=/usr/local/mysql --datadir=/usr/local/mysql/data
+cp /usr/local/mysql/support-files/my-medium.cnf /etc/my.cnf
+cp /usr/local/mysql/support-files/mysql.server /etc/init.d/mysqld
+vim /etc/profile
+PATH=/usr/local/mysql/bin:/opt/hadoop/mysql/lib:$PATH
+chkconfig --level 35 mysqld on
+netstat -na | grep 3306
+设定sqoop登录权限
+mysql> insert into mysql.user(Host,User,Password) values("localhost","sqoop",password("sqoop"));
+mysql> flush privileges;
+mysql> grant all privileges on *.* to 'sqoop'@'192.168.%' identified by 'sqoop' with grant option;
+mysql> grant all privileges on *.* to 'sqoop'@'192.168.202.4' identified by 'sqoop' with grant option;
+mysql> flush privileges;
+
+##设置密码
+mysqladmin -u root password "newpass"
+mysqladmin -u root password oldpass "newpass"
+或者
+mysql> update user set password=PASSWORD('123456') where user='root';
+安全模式设置:
+mysqld_safe --skip-grant-tables&
+mysql -u root mysql
+mysql> UPDATE user SET password=PASSWORD("new password") WHERE user='root';
+设置权限：
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'admin123' WITH GRANT OPTION; flush privileges;
+无密码的话''内为空即可
+
+[hadoop@master software]$ tar -zxvf sqoop-1.3.0-cdh3u5.tar.gz
+[hadoop@master software]$ mv sqoop-1.3.0-cdh3u5 /opt/modules/
+##scoop配置
+cp hadoop-core-0.20.2-cdh3u5.jar /home/hadoop/sqoop-1.3.0-cdh3u5/lib/
+cp ojdbc6.jar /opt/modules/sqoop-1.3.0-cdh3u5/lib/
+ vi ~/.bash_profile
+export SQOOP_HOME=/opt/modules/sqoop-1.3.0-cdh3u5
+
+vi configure-sqoop
+注释掉hbase和zookeeper检查
+## Moved to be a runtime check in sqoop.
+#if [ ! -d "${HBASE_HOME}" ]; then
+#  echo "Warning: $HBASE_HOME does not exist! HBase imports will fail."
+#  echo 'Please set $HBASE_HOME to the root of your HBase installation.'
+#fi
+
+# export HBASE_HOME
+
+测试连接
+sqoop-list-tables --connect jdbc:mysql://192.168.202.4:3306/test --username sqoop --password sqoop
+
+sqoop import --connect jdbc:mysql://192.168.202.4:3306/test --username sqoop --password sqoop --table sss -m 1

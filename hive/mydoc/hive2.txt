@@ -1,0 +1,322 @@
+Hive执行命令方式
+-----------------------
+前面cli,jdbc,hwi,beeline(允许客户端不在集群的节点上,belline+jdbc远程访问)
+详细讲cli shell
+-------------------------
+	hive -help / hive --help
+	list,source
+	hive --service [ hiveburninclient hiveserver2 hiveserver hwi jar lineage metastore metatool orcfiledump rcfilecat schemaTool version ]
+	hive -d,--define <key=value>(用于在hive shell中使用)
+	-e <quoted-query-string>(在shell脚本中用的多,不用进入hive shell中执行)
+	-f <filename> (读取file中的hiveQL)
+	-i <filename> (初始化file中的jar,udf等)
+	-S,--silent (沉默)
+	-v,--verbose (输出详细信息)
+hive -S -e "select * from testext" > /home/hadoop/test/out
+hive -v -e "select * from testext"
+hive -f /home/hadoop/test/query
+#shell脚本执行,简单演示
+#!/bin/bash
+time='...'
+hive -e "insert table select * from testext where name=${time}"
+#用于日常作业注,命令脚本必须在集群的节点或hiveclient执行
+	list和source
+hive> add jar /opt/app/jar/docFileInputFormat.jar;
+Added [/opt/app/jar/docFileInputFormat.jar] to class path
+Added resources: [/opt/app/jar/docFileInputFormat.jar]
+hive> list jar;
+/opt/app/jar/docFileInputFormat.jar
+/opt/app/jar/docFileInputFormat.jar
+hive> source /home/hadoop/test/query;
+OK
+table1	test1
+table2	test2
+Time taken: 1.048 seconds, Fetched: 2 row(s)
+
+Hive操作-变量
+----------------------------------
+	配置变量
+	set val='';
+	${hiveconf:val}
+	环境变量
+	${env:HOME},注env查看所有环境变量
+hive> set val = table1;
+hive> select * from testext where name = '${hiveconf:val}' ;
+table1	test1
+hive> select '${env:HOME}' from testext;
+/home/hadoop
+/home/hadoop
+
+Hive数据加载
+----------------------
+	内表数据加载
+	创建表示加载 create table newtable as select col1,col2 from oldtable
+	创建表时指定数据位置 create table tablename() location ''
+	本地数据加载 load data local inpath 'localpath' [overwrite] into table tbl
+	加载hdfs数据 load data inpath 'hdfspath' [overwrite] into table tbl 注意:这是移动操作
+	使用Hadoop命令拷贝数据到指定位置(hive的shell中执行和linux中shell执行)
+	由查询语句加载数据
+insert [overwrite | into] table tablename
+select col1,col2 from table where ...
+或者
+from table insert [overwrite | into] table tablename
+select col1,col2 where ...
+其中from字句和select字句,where字句放在前面和后面等位置
+from testext insert overwrite table test_m
+select name,addr where name = 'zhangsan'
+字段对应和关系型数据不同,以顺序为准,与字段名称无关
+
+	外部表数据加载
+	创建表是自定location同上,查询插入,同上
+	使用hadoop命令拷贝数据到指定位置(hive的shell中执行和linux的shell执行)
+create external table test_e(
+name string,val string)
+row format delimited fields terminated by '\t' lines terminated by '\n'
+stored as textfile location '/external/data';
+
+Hive分区表数据加载
+--------------------------
+	分区表数据加载
+	内部分区表和外部分区表分别类似于内表和外表
+	注意:数据存放的路径层次要和表的分区一致;
+	如果分区表没有新增分区表,及时目标路径下已经有数据了,但依然查不到数据
+	不同之处:加载数据指定目标表的同时,需要指定分区
+	本地数据加载
+load data local inpath'localpath' [overwrite] into table tablename partition(pn='')
+	加载hdfs数据
+load data inpath 'hdfspath' [overwrite] into table tablename partition(pn='')
+	由查询语句加载数据
+insert [overwrite] into table tablename partition(pn='')
+select col1,col2...from table ..where ..
+	实例:
+create table test_p(
+name string,val string)
+partitioned by (dt string)
+row format delimited fields terminated by '\t' lines terminated by '\n'
+stored as textfile;
+load data local inpath'/home/hadoop/test/data'  into table test_p partition(dt='20160601');
+show partitions test_p;
+
+create external table test_ep(
+name string,val string)
+partitioned by (dt string)
+row format delimited fields terminated by '\t' lines terminated by '\n'
+stored as textfile location '/external/data';
+hive> select * from test_ep;
+OK
+Time taken: 0.118 seconds
+hive> dfs -mkdir /external/data/dt=20160601;
+hive> dfs -copyFromLocal /home/hadoop/test/data /external/data/dt=20160601;
+hive> select * from test_ep;
+OK
+Time taken: 0.117 seconds
+hive> alter table test_ep add partition(dt='20160601');
+OK
+Time taken: 0.441 seconds
+hive> select * from test_ep;
+OK
+wang	123	20160601
+liu	456	20160601
+zhang	789	20160601
+Time taken: 0.13 seconds, Fetched: 3 row(s)
+	Hive数据加载注意问题
+	--------------------------
+	分隔符问题,且分隔符只认单个字符,如 '#\t' 默认是'#'
+	数据类型对应问题
+		load数据,字段类型不能互相转化,查询返回null
+		select查询插入,字段类型不能互相转化,插入数据为null,文件内容是在的
+	select查询插入数据,字段值顺序要与表中字段顺序一致,名称可不一致
+		hive在数据加载时不做检查,查询时检查(例如外部表)
+	外部表分区表需要添加分区才能看到数据
+实例:
+create external table test_sp(
+name string,val string)
+row format delimited fields terminated by '#\t' lines terminated by '\n';
+data2 (test#\t1格式)
+test1#	1
+test2#	2
+load data local inpath '/home/hadoop/test/data2' into table test_sp;
+hive> select * from test_sp;
+test1		1
+test2		2
+这里第二个字段其实是\t1和\t2,将\t作为了字段值的一部分
+create external table test_sp2(
+name string,val string)
+row format delimited fields terminated by '\t';
+data2 (test1\t1格式)
+test1	1
+test2	2
+load data local inpath '/home/hadoop/test/data2' into table test_sp2;
+hive> select * from test_sp2;
+test1	1
+test2	2
+对于文件存储的类型和hive表结构中类型不一致的时候,查询显示null,而文件的值是存在的,不演示了.
+
+
+Hive数据导出
+------------------------------------
+	导出方式
+		hadoop命令方式:get/text
+		通过insert ... directory方式
+			insert overwrite [local] directory '/tmp/dir'
+			[row format delimited fields terminated by '\t']
+			select name,salary,address from employees
+		Shell命令加管道:hive -f/e | sed/grep/awk > file
+		第三方工具 sqoop
+演示:
+--------------------
+hadoop fs -get /data/* /home/hadoop/test/out
+hadoop fs -text /data/* > /home/hadoop/test/text.out
+
+insert overwrite local directory '/home/hadoop/test/ext/'
+row format delimited fields terminated by '\t'
+select name,addr from testext;
+如果不使用row format写入到本地,分隔符为不识别的asci码.
+insert overwrite directory '/test/testext/'
+select name,addr from testext;
+在hdfs上不能使用row format分割.
+hive -S -e "select * from testext" | grep test1
+
+Hive动态分区
+-------------------------
+	不需要为不同的分区添加不同的插入语句
+	分区不明确,需要从数据中能够获取
+	需要设置几个参数:
+set hive.exec.dynamic.partition=true;	//使用动态分区
+set hive.exec.dynamic.partition.mode=nonstrict;	//无限制模式
+如果模式是strict,则必须有一个静态分区,且放在最前面
+set hive.exec.max.dynamic.partitions.pernode=10000;	//每个节点生成动态分区的最大个数
+set hive.exec.max.dynamic.partitions=100000;	//生成动态分区的最大个数
+set hive.exec.max.created.files=150000;	//一个任务最多可以创建的文件数目
+set dfs.datanode.max.xcievers=8192;	//限定一次最多打开的文件数
+注意:每天产生的动态分区不要太多,一年下来,mysql吃不消
+create table d_part(name string)
+partitioned by (value string)
+row format delimited fields terminated by '\t' lines terminated by '\n';
+insert into table d_part partition(value)
+select name ,addr as value from testext;
+show partitions d_part;
+两个分区
+create table d_part2(name string)
+partitioned by (value string,dt string)
+row format delimited fields terminated by '\t';
+insert into table d_part2 partition(value,dt)
+select 'test' as name ,addr as value, name as dt from testext;
+hive> show partitions d_part2;
+value=1/dt=zhangshan
+value=123/dt=wang
+value=2/dt=lisi
+value=3/dt=wangwu
+value=4/dt=zhaoliu
+value=456/dt=liu
+value=789/dt=zhang
+value=test1/dt=table1
+value=test2/dt=table2
+将hive.exec.dynamic.partition.mode改过来,在测试
+set hive.exec.dynamic.partition.mode=strict;
+create table d_part3(name string)
+partitioned by (value string,dt string)
+row format delimited fields terminated by '\t';
+insert into table d_part3 partition(value,dt)
+select 'test' as name ,addr as value, name as dt from testext;
+将会报错如此下:
+FAILED: SemanticException [Error 10096]: Dynamic partition strict mode requires at least one static partition column. To turn this off set hive.exec.dynamic.partition.mode=nonstrict
+这时候需要如下插入操作:(value必须设置为静态的分区)
+insert into table d_part3 partition(value='static',dt)
+select 'test' as name , name as dt from testext;
+表属性操作
+-----------------------------
+	修改表名称
+	alter table table_name remane to new_table_name;
+	修改列名
+	alter table tb change column c1 c2 int comment 'xxx' after severity;	//可以把该列放到指定列的后面,或者使用'first'放到第一位
+	增加列
+	alter talbe tb add columns (c1 string comment 'xxx',c2 long comment 'yyy')
+实例
+--------------------------
+drop table if exists testc;
+create table testchange(name string ,value string);
+alter table testchange rename to testc;
+alter table testc add columns(type string,col int comment 'xxx');
+alter table testc change column type type string after name;
+alter table testc change column type type string first;
+alter table testc change column type col2 int;
+
+修改表属性tblproperties
+alter table testc set tblproperties('comment'='xxxxx');
+desc formatted testc;
+针对无分去表与有分区表不同
+alter table table_name set serdeproperties('field.delim'='\t');
+实例:
+drop table if exists city;
+create table city(
+time string,country string,province string,city string)
+row format delimited fields terminated by '#'
+lines terminated by '\n' stored as textfile;
+/home/hadoop/test/city (数据格式)
+201608241212	中国	北京	北京
+201608241213	中国	河南	洛阳
+201608241214	中国	湖北	武汉
+load data local inpath'/home/hadoop/test/city' overwrite into table city;
+select * from city;
+201608241212	中国	北京	北京	NULL	NULL	NULL
+201608241213	中国	河南	洛阳	NULL	NULL	NULL
+201608241214	中国	湖北	武汉	NULL	NULL	NULL
+#这是因为建表的格式以#为分隔符,文本中没有#,所以整行作为第一个字段内容,其他为null
+desc formatted city;
+Storage Desc Params:
+	field.delim         	#
+	line.delim          	\n
+	serialization.format	#
+alter table city set serdeproperties('field.delim'='\t');
+然后在select * from city;	内容就没有null
+而对于分区表:
+drop table if exists city;
+create table city(
+time string,country string,province string,city string)
+partitioned by (dt string)
+row format delimited fields terminated by '#'
+lines terminated by '\n' stored as textfile;
+load data local inpath'/home/hadoop/test/city' into table city partition(dt='20160601');
+select * from city;
+显示结果如下,原因同上,以上面的方式更改就不能生效
+alter table city set serdeproperties('field.delim'='\t');
+201608241212	中国	北京	北京	NULL	NULL	NULL	20160601
+201608241213	中国	河南	洛阳	NULL	NULL	NULL	20160601
+201608241214	中国	湖北	武汉	NULL	NULL	NULL	20160601
+还需要添加分区进行更改
+alter table city partition(dt='20160601') set serdeproperties('field.delim'='\t');
+但是此时如果再设置一个新的分区,分隔符依然还是#
+load data local inpath'/home/hadoop/test/city' into table city partition(dt='20160602');
+select * from city where dt='20160602';
+这时候还需更改的全局的serdeproperties,同无分区表的操作相同
+alter table city set serdeproperties('field.delim'='\t');
+(对分区表来说,此更改对新增的所有分区有效,之前的需要指定分区更改)
+
+修改location
+alter table table_name [partition()] set location 'path'
+alter table table_name set tblproperties('external'='true');//内部表转外部表
+alter table table_name set tblproperties('external'='false');//外部表转内部表
+drop table if exists city;
+create table city(
+time string,country string,province string,city string)
+row format delimited fields terminated by '\t'
+lines terminated by '\n' stored as textfile;
+alter table city set location 'hdfs://hadoop:9000/location';
+select * from city;
+drop table city;
+这时候由于city是内部表,删除的时候,会把hdfs的文件一并删除,实际工作中需要注意
+
+内部表转外部表
+alter table city set tblproperties('external'='true');
+desc formatted city;
+多用于:有一个内部表,含有很多记录,需要对字段修改很麻烦,这时候可以转化为外部表,删除,然后重新建表,指定位置
+
+其他表属性操作:
+alter table/partition file format
+alter table storage properties
+alter table rename partition
+alter table set location
+等等可以在hive.apache.org中wiki搜索Langugage DDL
+
+

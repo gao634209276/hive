@@ -1,0 +1,100 @@
+http://blog.csdn.net/xiewenbo/article/details/50466236
+为了更高效地运行存在依赖关系的作业（比如Pig和Hive产生的MapReduce作业），减少磁盘和网络IO，Hortonworks开发了DAG计算框架Tez。
+Tez是从MapReduce计算框架演化而来的通用DAG计算框架，可作为MapReduceR/Pig/Hive等系统的底层数据处理引擎，它天生融入Hadoop 2.0中的资源管理平台YARN，且由Hadoop 2.0核心人员精心打造，势必将会成为计算框架中的后起之秀
+gcc make gcc-c++ openssl  nodejs
+java maven Protocol Buffers 2.5.0
+编译:
+更改pom中hadoopversion或在mvn中设定自己hadoop版本
+mvn package -Dhadoop.version=2.7.2 -DskipTests -Dmaven.javadoc.skip=true
+使用tez-dist/target/中的tez-0.8.4-minimal.tar.gz,在本地解压,设置环境变量
+export TEZ_HOME=/opt/single/tez
+export TEZ_CONF_DIR=$TEZ_HOME/conf
+export TEZ_JARS=$TEZ_HOME
+在hadoop-env.sh中加入
+export HADOOP_CLASSPATH=$HADOOP_CLASSPATH:$TEZ_CONF_DIR:$TEZ_JARS/*:$TEZ_JARS/lib/*
+mapred-size.xml设置
+	<property>
+		<name>mapreduce.framework.name</name>
+		<value>yarn-tez</value>
+	</property>
+在$TEZ_HOME下建立conf,创建tez-site.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+	<property>
+		<name>tez.lib.uris</name>
+		<value>hdfs://hadoop:9000/apps/tez-0.8.4/tez-0.8.4-minimal.tar.gz</value>
+	</property>
+	<property>
+		<name>tez.use.cluster.hadoop-libs</name>
+		<value>true</value>
+	</property>
+	<property>
+		<description>Enable Tez to use the Timeline Server for History Logging</description>
+		<name>tez.history.logging.service.class</name>
+		<value>org.apache.tez.dag.history.logging.ats.ATSHistoryLoggingService</value>
+	</property>
+
+	<property>
+		<!--tomcat 9999 端口-->
+		<name>tez.tez-ui.history-url.base</name>
+		<value>http://hadoop:8008/tez-ui/</value>
+	</property>
+
+	<property>
+		<name>tez.runtime.convert.user-payload.to.history-text</name>
+		<value>true</value>
+	</property>
+
+	<property>
+		<name>tez.task.generate.counters.per.io</name>
+		<value>true</value>
+	</property>
+</configuration>
+将tez-0.8.4-minimal.tar.gz上传到hdfs://hadoop:9000/apps/tez-0.8.4/目录下
+在yarn-site.xml中设置
+	<property>
+		<name>yarn.timeline-service.enabled</name>
+		<value>true</value>
+	</property>
+	<property>
+		<name>yarn.timeline-service.hostname</name>
+		<value>hadoop</value>
+	</property>
+	<property>
+		<name>yarn.timeline-service.http-cross-origin.enabled</name>
+		<value>true</value>
+	</property>
+	<property>
+		<name>yarn.resourcemanager.system-metrics-publisher.enabled</name>
+		<value>true</value>
+	</property>
+	<property>
+		<name>yarn.timeline-service.webapp.address</name>
+		<value>${yarn.timeline-service.hostname}:8188</value>
+	</property>
+	<property>
+		<name>yarn.timeline-service.webapp.https.address</name>
+		<value>${yarn.timeline-service.hostname}:2191</value>
+	</property>
+在hadoop上部署tomcat,并将tez ui war包解压在tomcat的webapps下
+mkdir /opt/modules/tomcat-7.0.69/webapps/tez-ui
+cp /opt/single/tez/tez-ui-0.8.4.war /opt/modules/tomcat-7.0.69/webapps/tez-ui
+cp /opt/single/tez/tez-ui2-0.8.4.war /opt/modules/tomcat-7.0.69/webapps/tez-ui2
+解压:
+jar xvf tez-ui-0.8.4.war
+jar xvf tez-ui2-0.8.4.war
+配置scripts/config.js文件
+timelineBaseUrl: 'http://hadoop:8188',
+RMWebUrl: 'http://hadoop:8088',
+
+tomcat设置:
+端口:8008
+start-dfs.sh
+start-yarn.sh
+yarn-daemon.sh start timelineserver
+startup.sh
+
+其他监控:
+关闭tomcat:
+shutdown.sh

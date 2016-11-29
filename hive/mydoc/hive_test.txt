@@ -1,0 +1,144 @@
+create table employees (
+name string,
+salary float,
+subordinates array<string>,
+deductins map<string,float>,
+address struct<street:string,city:string,state:string,zip:int>);
+show create table employees;
+
+create database finacials
+with dbproperties('creator'='Mark Moneybags','data'='2016-06-01');
+describe database finacials;
+describe database extended finacials;
+drop database if exists finacials;
+alter database finacials set dbproperties('edited-by' = 'hive');
+
+create external table if not exists stocks (
+exchanged string, symbol string, ymd string, price_open float, price_high float, price_low float, price_close float, volume int, price_adj_close float)
+row format delimited fields terminated by ',' location '/user/hive/external/stocks';
+
+
+set hive.mapred.mode=strict;
+select e.name,e.salary from employees e limit 100;
+show partitions employees;
+show partitions employees partition(dt='20160101');
+sescribe extended employees;
+load data local inpath'/...' into table employees partition(dt='...',type='xx');
+
+####UDF TEXTFILE
+输入输出SerDe:org.apache.hadoop/hive.serde2.lazy.LazySimpleSerDe
+TEXTFILE:org.apache.hadoop.hive.al.io.HiveIgnoreKeyTextOutputFormat
+自定义:
+create table kst paritition by (ds stirng)
+row format serde 'com.linkedin.haivvreo.AvroSerDe'
+with serdepropertoes('schema.url'='http://schema_provider/kst.avsc')
+stored as inputformat 'com.linkedin.haivvreo.AvroContainerInputFormat'
+outputformat 'com.linkedin.haivvreo.AvroContainerOutputFormat';
+
+动态分区插入:
+insert overwrite table employees partition(country,state)
+select ...,se.cnty,se.st from staged_employees se;
+
+视图:
+drop table if exists userinfo;
+create table if not exists userinfo(
+firstname string,lastname string,ssn string,password string)
+row format delimited fields terminated by '\t';
+drop view if exists safer_user_info;
+create view safer_user_info as
+select firstname,lastname from userinfo;
+load data local inpath'/home/hadoop/test/data/userinfo' into table userinfo;
+
+索引
+create index user_info_index on table userinfo (firstname)
+as 'org.apache.hadoop.hive.ql.index.compact.CompactIndexHandler'
+with deferred rebuild idxproperties ('creator' = 'hive','create_at' = 'some_time')
+in table user_info_index comment 'userinfo indexed by firstname';
+show formatted index on userinfo;
+
+
+MySQL:collect udaf模拟:
+mysql实例:
+create table people (name varchar(20), friendname varchar(20));
+insert people values('bob','sara');
+insert people values('bob','john');
+insert people values('bob','ted');
+insert people values('john','sara');
+insert people values('ted','bob');
+insert people values('ted','sara');
+select * from people;
+select name,group_concat(friendname separator ',')
+from people group by name;
+hive模拟:
+
+
+hivef streaming
+create table a (col1 int,col2 int)
+row format delimited fields terminated by '\t';
+4	5
+3	2
+load data local inpath'/home/hadoop/test/data/a' overwrite into table a;
+select transform (col1, col2)
+using '/bin/cat' as newA, newB
+from default.a;
+
+select transform (col1, col2)
+using '/bin/cat' as (newA Int, newB Double) from a;
+
+select transform (col1, col2)
+using '/usr/bin/cut -f1' as newA, newB from a;
+
+select transform (col1, col2)
+using '/bin/sed s/4/10/' as newA from default.a;
+touch ctof.sh
+#!/bin/bash
+while read line
+do
+	res=$(echo "scale=2;((9/5) * $line) + 32" | bc)
+	echo $res
+done
+
+hive>
+add file /home/hadoop/test/data/ctof.sh;
+select transform(col1) using 'ctof.sh' as convert from a;
+
+k1=v1,k2=v2
+k4=v4,k5=v5,k6=v6
+k7=v7,k7=v7,k3=v7
+touch split_kv.pl
+#!/usr/bin/perl
+while(<STDIN>){
+	my $line = $_;
+	chomp($line);
+	my @kvs = split(/,/, $line);
+	foreach my $p (@kvs) (
+		my @kv = split(/=/, $p);
+		print $lv[0] . "\t" . $kv[1] . "\n";
+	)
+}
+create table kv_data ( line string);
+load data local inpath '/home/hadoop/test/data/kv_data.txt' into table kv_data;
+add file /home/hadoop/test/data/split_kv.pl;
+select transform (line)
+using 'perl split_kv.pl' as (key,value) from kv_data;
+
+SerDe
+create table columnTable(key int,value int)
+row format serde 'org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe'
+stored as inputformat 'org.apache.hadoop.hive.ql.io.RCFileInputFormat'
+outputformat 'org.apache.hadoop.hive.ql.io.RCFileOutputFormat';
+from a insert overwrite table columnTable select a.col1, a.col2;
+
+Avro
+create table doctors row format serde 'org.apache.hadoop.hive.serde2.avro.AvroSerDe'
+stored as inputformat 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+outputformat 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat'
+tblproperties ('avro.schema.literal'='{
+"manespace":"testing.hive.avro.serde",
+"name":"doctors",
+"type":"record",
+"fields":[{"name":"number","type":"int","doc":"Order of playing the role"},
+{"name":"first_name","type":"string","doc":"first name of actor playing role"},
+{"name":"last_name","type":"string","doc":"last name of actor playing role"}]
+}');
+describe doctors;

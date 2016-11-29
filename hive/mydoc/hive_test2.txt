@@ -1,0 +1,223 @@
+1 hive
+
+hive> create table stmp (id int,age int,name string)
+    > row format delimited
+    > fields terminated by '\t';
+OK
+Time taken: 0.068 seconds
+hive> load data local inpath '/home/hadoop/s1.txt' into table stmp;                        Copying data from file:/home/hadoop/s1.txt
+Copying file: file:/home/hadoop/s1.txt
+Loading data to table default.stmp
+OK
+Time taken: 0.186 seconds
+hive> create table ss(id int,age int,name string) partitioned by (sj string) clustered by (id) sorted by (age) into 2 buckets
+    > row format delimited fields terminated by '\t';
+OK
+Time taken: 0.06 seconds
+hive> from stmp
+    > insert overwrite table ss partition(sj='5-27') select id,age,name sort by age;
+Total MapReduce jobs = 2
+Launching Job 1 out of 2
+Number of reduce tasks not specified. Estimated from input data size: 1
+In order to change the average load for a reducer (in bytes):
+  set hive.exec.reducers.bytes.per.reducer=<number>
+In order to limit the maximum number of reducers:
+  set hive.exec.reducers.max=<number>
+In order to set a constant number of reducers:
+  set mapred.reduce.tasks=<number>
+Starting Job = job_201604270239_0006, Tracking URL = http://master.dragon.org:50030/jobdetails.jsp?jobid=job_201604270239_0006
+Kill Command = /opt/modules/hadoop-0.20.2/bin/../bin/hadoop job  -Dmapred.job.tracker=master.dragon.org:9001 -kill job_201604270239_0006
+Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 1
+2016-04-27 03:21:11,329 Stage-1 map = 0%,  reduce = 0%
+2016-04-27 03:21:14,358 Stage-1 map = 100%,  reduce = 0%
+2016-04-27 03:21:23,445 Stage-1 map = 100%,  reduce = 100%
+Ended Job = job_201604270239_0006
+Launching Job 2 out of 2
+Number of reduce tasks determined at compile time: 2
+In order to change the average load for a reducer (in bytes):
+  set hive.exec.reducers.bytes.per.reducer=<number>
+In order to limit the maximum number of reducers:
+  set hive.exec.reducers.max=<number>
+In order to set a constant number of reducers:
+  set mapred.reduce.tasks=<number>
+Starting Job = job_201604270239_0007, Tracking URL = http://master.dragon.org:50030/jobdetails.jsp?jobid=job_201604270239_0007
+Kill Command = /opt/modules/hadoop-0.20.2/bin/../bin/hadoop job  -Dmapred.job.tracker=master.dragon.org:9001 -kill job_201604270239_0007
+Hadoop job information for Stage-2: number of mappers: 1; number of reducers: 2
+2016-04-27 03:21:32,443 Stage-2 map = 0%,  reduce = 0%
+2016-04-27 03:21:35,473 Stage-2 map = 100%,  reduce = 0%
+2016-04-27 03:21:44,550 Stage-2 map = 100%,  reduce = 50%
+2016-04-27 03:21:45,594 Stage-2 map = 100%,  reduce = 100%
+Ended Job = job_201604270239_0007
+Loading data to table default.ss partition (sj=5-27)
+Partition default.ss{sj=5-27} stats: [num_files: 2, num_rows: 0, total_size: 39, raw_data_size: 0]
+Table default.ss stats: [num_partitions: 1, num_files: 2, num_rows: 0, total_size: 39, raw_data_size: 0]
+3 Rows loaded to ss
+MapReduce Jobs Launched:
+Job 0: Map: 1  Reduce: 1   HDFS Read: 39 HDFS Write: 174 SUCCESS
+Job 1: Map: 1  Reduce: 2   HDFS Read: 362 HDFS Write: 39 SUCCESS
+Total MapReduce CPU Time Spent: 0 msec
+OK
+Time taken: 43.271 seconds
+hive> select * from ss;
+OK
+11	22	zhangsan	5-27
+33	44	lisi	5-27
+55	66	wangwu	5-27
+Time taken: 0.103 seconds
+hive>
+
+
+[hadoop@master ~]$ hadoop fs -cat /user/hive/warehouse/ss/sj=5-27/000001_0
+11	22	zhangsan
+33	44	lisi
+55	66	wangwu
+
+
+编写hive时间格式:
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import org.apache.hadoop.hive.ql.exec.UDF;
+
+public class TimeFormat extends UDF{
+
+	public String evaluate(String num){
+		Date d = new Date(Long.decode(num));
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:MM:SS");
+		return sdf.format(d);
+
+	}
+}
+shell命令行编译
+javac -classpath /opt/modules/hadoop-0.20.2/hadoop-0.20.2-core.jar:/opt/modules/hive-0.9.0-bin/lib/hive-exec-0.9.0.jar TimeFormat.java
+vi main.mf
+Manifest-Version: 1.0
+shell打包:
+shell命令
+# jar  cvfm TF.jar main.mf TimeFormat.class
+hive中添加jar包
+hive> add jar /home/hadoop/TF.jar;
+Added /home/hadoop/TF.jar to class path
+Added resource: /home/hadoop/TF.jar
+在hive中添加临时函数TFF 这里的TimeFormat不能改
+hive> create TEMPORARY FUNCTION TFF AS 'TimeFormat';
+OK
+Time taken: 0.035 seconds
+创建一个内容含有时间戳的表
+hive> create table time(id bigint)
+    > row format delimited
+    > fields terminated by '\t';
+OK
+Time taken: 0.091 seconds
+
+[hadoop@master ~]$ more c.txt
+1417792637000
+hive> load data local inpath '/home/hadoop/c.txt' into table time;
+Copying data from file:/home/hadoop/c.txt
+Copying file: file:/home/hadoop/c.txt
+Loading data to table default.time
+OK
+Time taken: 0.517 seconds
+
+在表中使用TFF函数
+hive> select TFF(id) from time;
+Total MapReduce jobs = 1
+Launching Job 1 out of 1
+Number of reduce tasks is set to 0 since there's no reduce operator
+Starting Job = job_201604270239_0012, Tracking URL = http://master.dragon.org:50030/jobdetails.jsp?jobid=job_201604270239_0012
+Kill Command = /opt/modules/hadoop-0.20.2/bin/../bin/hadoop job  -Dmapred.job.tracker=master.dragon.org:9001 -kill job_201604270239_0012
+Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 0
+2016-04-27 04:40:05,734 Stage-1 map = 0%,  reduce = 0%
+2016-04-27 04:40:08,763 Stage-1 map = 100%,  reduce = 0%
+2016-04-27 04:40:11,803 Stage-1 map = 100%,  reduce = 100%
+Ended Job = job_201604270239_0012
+MapReduce Jobs Launched:
+Job 0: Map: 1   HDFS Read: 14 HDFS Write: 20 SUCCESS
+Total MapReduce CPU Time Spent: 0 msec
+OK
+2014-12-05 23:12:00
+Time taken: 10.805 secons
+
+
+2 sqoop
+[hadoop@master software]$ tar -zxvf sqoop-1.3.0-cdh3u5.tar.gz
+[hadoop@master software]$ mv sqoop-1.3.0-cdh3u5 /opt/modules/
+配置
+sqoop-1.3.0-cdh3u5版本必须要与hadoop -0.20.2-cdh3u5版本匹配,注入jar包
+cp hadoop-core-0.20.2-cdh3u5.jar /home/hadoop/sqoop-1.3.0-cdh3u5/lib/
+cp ojdbc6.jar /opt/modules/sqoop-1.3.0-cdh3u5/lib/
+ vi ~/.bash_profile或者vi /etc/profile
+export SQOOP_HOME=/opt/modules/sqoop-1.3.0-cdh3u5
+vi/sqoophome/bin/configure-sqoop
+注释掉hbase和zookeeper检查
+## Moved to be a runtime check in sqoop.
+#if [ ! -d "${HBASE_HOME}" ]; then
+#  echo "Warning: $HBASE_HOME does not exist! HBase imports will fail."
+#  echo 'Please set $HBASE_HOME to the root of your HBase installation.'
+#fi
+# export HBASE_HOME
+
+测试连接
+sqoop-list-tables --connect jdbc:mysql://192.168.202.4:3306/test --username sqoop --password sqoop
+将mysql中用户sqoop用户下sss导入到HDFS
+sqoop import --connect jdbc:mysql://192.168.202.4:3306/test --username sqoop --password sqoop --table sss -m 1
+运行完成通过hadoop dfs命令可以产看到mysql的表sss已经导入到hdfs文件系统中
+[hadoop@master sqoop-1.3.0-cdh3u5]$ hadoop dfs -cat /user/hadoop/sss/part-m-00000
+1,zhangsan
+2,lisi
+删除mysql中的记录
+mysql> use test;
+Database changed
+mysql> delete from sss;
+Query OK, 2 rows affected (0.02 sec)
+mysql> commit;
+Query OK, 0 rows affected (0.00 sec)
+mysql> select * from sss;
+Empty set (0.00 sec)
+再讲HDFS中的文件导入到mysql中
+sqoop export --connect jdbc:mysql://192.168.202.4:3306/test --username sqoop --password sqoop --table sss --export-dir hdfs://master:9000/user/hadoop/sss/part-m-00000
+执行完成后
+在查看mysql中sss的表
+mysql> select * from sss;
++------+----------+
+| id   | name     |
++------+----------+
+|    1 | zhangsan |
+|    2 | lisi     |
++------+----------+
+2 rows in set (0.00 sec)
+可以在导入中添加如下:
+****--input-fields-terminated-by '\t'
+ 声明分隔符*******
+
+sqoop eval工具：
+sqoop下 使用sql语句对 关系型数据库进行操作
+
+
+[hadoop@h91 sqoop-1.3.0-cdh3u5]$ bin/sqoop eval --connect jdbc:mysql://192.168.202.4:3306/test --username sqoop --password sqoop --query "select * from sss"
+
+[hadoop@h91 sqoop-1.3.0-cdh3u5]$ bin/sqoop eval --connect jdbc:mysql://192.168.202.4:3306/test --username sqoop --password sqoop --query "insert into sss values(3,'ww')"
+ble test
+
+1.1 sqoop命令
+2.1.1 列出mysql数据库总所有数据库
+连接 --connection 驱动+mysql+url+port
+用户名--username
+密码--password
+sqoop list-database 连接mysql 账号 密码
+2.1.2 连接mysql并列出test数据库中的表
+sqoop list-talbe 连接+test库名 +..
+2.1.3 将关系型数据的表结构复制到hive中
+只复制表的结构,表中的内容没有复制.
+sqoop create-hive-table --connect jdbc:mysql://192.168.202.4:3306/test --talbe sss --username sqoop --passwod sqoop --hive-table test
+sqoop create-hive-table 连接mysql   --hive-talbe 表名
+(需要配置hive)
+2.1.4 从关系数据库导入文件到hive中
+sqoop import 连接+数据库 --hive-import --hive-table 表名 -m 1
+2.1.5 将hive中的表数据导入到mysql中
+在进行导入之前,mysql中的表hive中的表现建好
+sqoop export 连接+表 --export-dir HDFS中hive表对应的路径
+2.1.6 从数据库导入表的数据 到HDFS上文件
+sqoop import 连接+表 -m 1 --target-dir 路径
+2.1.7 从数据库增量导入表数据到hdfs中
+sqoop import 连接 --table 表 -m 1 --target-dir hdfs的目标路径 --check-column (检查列)id --incremental append (增量递加) --last-value 3(最后的一个值)
+执行完之后,在hdfs相应的文件目录a下就会生成mysql表中列id=3后的记录.

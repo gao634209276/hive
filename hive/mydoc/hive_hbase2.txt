@@ -1,0 +1,52 @@
+Hive-1.2.1与HBase-1.1.2的整合
+
+这里的整合是指，将HBase作为存储数据的库，由Hive作为连接桥梁
+修改 Hive hive-site.xml
+
+增加
+<property>
+    <name>hbase.zookeeper.quorum</name>
+    <value>master:2181,slave1:2182,slave2:2183</value>
+  </property>
+  <property>
+
+将HBase的以下jar包放到Hive的lib下
+
+hbase-common-1.1.2.jar
+hbase-server-1.1.2.jar
+hbase-client-1.1.2.jar
+hbase-protocol-1.1.2.jar
+htrace-core-3.1.0-incubating.jar
+netty-all-4.0.23.Final.jar
+hbase-hadoop2-compat-1.1.2.jar
+hbase-hadoop-compat-1.1.2.jar
+metrics-core-2.2.0.jar
+
+我这里在Hive中创建表时，出现了
+
+FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.DDLTask. org.apache.hadoop.hbase.HTableDescriptor.addFamily(Lorg/apache/hadoop/hbase/HColumnDescriptor;)V
+
+这个问题是版本适配问题，关键在Hive 下hive-hbase-handler-1.2.1.jar 这个jar需要重新进行编译
+
+hive-hbase-handler-1.2.1.jar编译步骤
+
+进入hive源码包，找到hbase-handler的源码
+使用Eclipse创建Java工程，名称随意
+在src(请注意)下导入handler源码
+Import-->General-->File System-->handler源码
+导入关联jar包
+我这里是将Hbase 和 Hive 包下的所有jar包放入了工程下的lib文件夹中，不要将 apache-curator-2.6.0.pom.xml 也导入工程环境中，否则无法正确打包
+
+导出jar包
+Export-->JAR file-->src(默认即可)
+导出jar包后，替换Hive lib 包下的相应jar包(hive-hbase-handler-1.2.1.jar)即可
+
+
+
+
+
+
+
+
+
+Hive与HBase的整合功能的实现是利用两者本身对外的API接口互相进行通信，相互通信主要是依靠hive_hbase-handler.jar工具类

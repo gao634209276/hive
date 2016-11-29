@@ -1,0 +1,188 @@
+Hive高级查询
+查询操作
+	group by(按照k分组)...order by(全局排序)
+	join(左外,右外,map)
+	distribute by((以reduce数量)分散数据)...sort by(对distribute by分散的数据局部排序)
+	cluster by(类似于distribute by和sort by的组合,聚合,按照key聚合在一起,同时按照value排序)
+	union all(多个表组合形成新表)
+	底层实现	Mapreduce
+几个简单的聚合操作
+	count 计数
+		count(*)Oracle等关系型中所有数据不全为null时候count才+1,hive也一样
+		count(1)对1这条记录进行count,有则+1,无则不加
+		count(col) 当col这一列中值为null不加
+	sum求和
+		sum(可转成数字的值) 返回bigint
+		对sum的结果进行操作必须讲int转换为bigint如:sum(col)+cast(1 as bigint)
+	avg求平均值
+		avg(可转成数字的值)返回double
+	distinct不同值个数
+		count(distinct col)
+
+Order by
+-------------------
+按照某些字段排序
+select col1,other... from table where condition
+order by col1,col2 [asc | desc]
+注意
+	order by 后可以有多个列进行排序,默认按字典排序
+	order by 为全局排序
+	order by需要reduce操作,且只有一个reduce,与配置无关
+实例:
+-------------------
+hive> select * from M;
+A	1
+C	5
+B	2
+C	3
+select * from M order by col1 desc, col2 asc;
+MapReduce过程
+	以col1,col2做为map的k,其他的列为v,在map中执行where条件语句过滤,经过map(k的col和clo2排序,然后再对v排序)排序后把数据传到同一个reduce,根据需要的排序方式进行
+	在实际工作中,数据量比较大时候,一般不要在大数据中进行order by操作,先根据需求将统计的结果导入到关系型数据库中,通过关系型数据库进行排序
+
+group by
+------------------
+按照某写字段的值进行分组,有相同值放到一起
+select col1[,col2],count(1),sel_expr(聚合操作) from table where condition
+group by col1[,col2] [having]
+注意
+	select后面非聚合列必须出现在group by 中
+	除了普通列就是一些聚合操作
+	group by后面也可以跟表达式,比如substr(col)
+特性
+	使用了reduce操作,受限于reduce数量,设置reduce参数mapred.reduce.tasks
+	输出文件个数与reduce数相同,文件大小与reduce处理的数据两有关
+问题
+	网络负载过重
+	数据倾斜,优化参数hive.groupby.skewindata
+实例
+-----------------------
+set mapred.reduce.tasks=5;
+select country,count(1) from info group by country;
+开启优化后在测试
+set hive.groupby.skewindata=true;
+select country,count(1) from info group by country;
+	注:此优化在针对海量数据处理有明显时间缩短,小量数据反而会更慢.设置groupby优化参数后,执行任务会变成两个mapreduce,第一个mapreduce对(k,v)对中的k进行添加一个临时的编号,根据编号平均分配数据,在第二次mapredcue中去除临时编号,执行hive的操作,防止数据倾斜
+mapreduce流程
+	map端读取数据,执行where条件过滤,将group by的字段(这里为country)作为map的key,其他的字段作为value(这里指的是count(1)也就是第一个字段), 对key的hash进行分区,决定结果由哪个reduce执行,map执行后(这里count在map端就是对相同的k的value进行统计,hive中还可以为sum,avg等聚合操作),reduce端执行再进行聚合操作,然后进行having过滤
+select col1 ,count(col2) from m group by col1;
+select distinct col1  from m;
+
+Join 表连接
+---------------------
+两个表m,n之间按照on条件连接,m中的一条记录和n中的一条记录组成一条行的记录
+join等值连接,只有某个值在m和n中同时存在时
+left outer join左外连接,左边的所有值和左右共有的值同理right outer join
+left semi join 类似于exists,左表的value在右表中查找,找到后,以后相同的value就不在进行查找,结果同样的value只列出一条记录
+mapjoin 在map端完成join操作,不需要用reduce,基于内存做join,属于优化操作,节省喝多时间
+a
+col1	col2
+1	w
+1	j
+2	r
+3	3
+b
+col3	col4
+1	f
+2	g
+2	q
+4	j
+set hive.optimize.skewjoin=true;
+select s.col1,s.col2,t.col4 from
+(select col1 from a) s [right outer | left outer | left semi] join (select col3 from b) t on s.col1 = t.col3 where s.col1 > 1;
+注意:on不支持不等操作
+Join的mapreduce过程
+map中分别对左表和右表进行读取数据,执行where条件(join子句的where),同时添加一个标记用于区分左表和右表的数据(k,v),按照上面样例,到reduce端后形成如(a.1:[w,j],b.1:f)的形式,然后根据hive的join类型进行操作,(join会保留a,b的共有部分,如果a和b的k的value为集合,将对v逐一配对,形成笛卡尔积,left out会保留a的所有(k,v)以及共有部分,semi join将会保留共有部分的第一个kv)
+练习
+----------------------
+hadoop@hadoop:test$ head -1 out.log
+27.19.74.143  [30/May/2013:17:38:20] GET "/static/image/common/faq.gif HTTP/1.1" 200 1127
+hadoop@hadoop:test$ wc -l out.log
+548160 out.log
+create table http(
+ip string,data string,action string,addr string,statu Int,down Int)
+row format delimited fields terminated by " ";
+load data local inpath '/home/hadoop/test/out.log' overwrite into table http;
+添加字段
+alter table http add columes(protocol string);
+alter table http change column proto type string after addr;
+看看action数据偏移情况
+select action,count(*) from http group by action;
+查看ip数据偏移情况
+select ip,count(*) tmp from http group by ip order by tmp desc limit 10;
+将ip次数最少的前十为存放到一个表中.
+insert overwrite table ipcount select ip,count(*) c from http group by ip sort by c limit 10;
+然后进行join连接
+select http.ip from http left semi join ipcount on http.ip=ipcount.ip group by http.ip;
+通过结果验证
+然后在测试Mapjoin
+将ipcount的表作为mapjoin,测试时间
+select /*+mapjoin(ipcount)*/ http.ip from http join ipcount on http.ip = ipcount.ip group by ipcount.ip;
+为了突显为题,讲group by操作去除
+Mapjoin
+--------------------
+mapjoin会在map端把小表加载到内存中,然后读取大表,和内存中的小表完成连接操作
+其中使用了分布式缓存技术
+优点
+	不消耗集群的reduce资源(reduce相对紧缺)
+	减少reduce操作,加快程序执行
+	降低网络负载
+缺点
+	占用部分内存,所以加载到内存中的表不能过大,因为每个计算节点都会加载以此
+	生成较多小文件
+mapreudce过程
+	从大表读取数据,执行where条件,把小表加载到内存中,没读取大表的一条数据,都要和内存的小表数据进行比较
+配置一下参数,是hive自动根据sql,选择使用common join或者map join
+	set hive.auto.convert.join = true;
+	hive.mapjoin.smalltable.filesize默认值为25000000
+	第二种方式,手动指定
+	select /*+mapjoin(n)*/ m.col,m.col2,n.col3 from m join n on m.col = n.col
+简单总结一下,mapjoin的使用场景:
+	1.关联操作中有一张表非常小
+	2.不等值的连接操作
+--------------------------------
+Hive分桶
+create table bucketed_user( id int ,name string)
+clustered by (id) sorted by (name) into 4 buckets
+row format delimited fields terminanted by '\t' stored as textfile;
+set hive.enforce.bucketing = true;
+对每个表或者分区,hive可以进一步组织为桶,hive是针对列进行分桶,采用hash,然后初一桶个数求余决定存放分桶的位置.
+好处
+	获取更高的查询处理效率
+	时取样(sampling)更高效
+分桶使用
+select * from bucketed_user tablesample(bucket 1 out op 2 on id)
+bucket join
+set hive.optimize.bucketmapjoin=true;
+set hive.optimize.bucketmapjoin.sortedmerge=true;
+hive.input.format=org.apache.hadoop.hive.ql.io.BucketizedHiveInputFormat;
+条件
+	两个表有一个相同列
+	两个表以相同方式划分桶,左边表内某个桶mapper知道右边表内相匹配的行在对应的桶内.
+	并不一定要求两个表必须桶个数相同,但要是倍数关系
+实例:
+表a为：
+CREATE TABLE a(key INT, othera STRING)
+CLUSTERED BY(key) INTO 4 BUCKETS
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\001'
+COLLECTION ITEMS TERMINATED BY '\002'
+MAP KEYS TERMINATED BY '\003'
+STORED AS SEQUENCEFILE;
+表b为：
+CREATE TABLE b(key INT, otherb STRING)
+CLUSTERED BY(key) INTO 32 BUCKETS
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\001'
+COLLECTION ITEMS TERMINATED BY '\002'
+MAP KEYS TERMINATED BY '\003'
+STORED AS SEQUENCEFILE;
+基于a.key和b.key进行JOIN操作，此时JOIN列同时也是BUCKET列，JOIN语句如下：
+SELECT /*+ MAPJOIN(b) */ a.key, a.value FROM a JOIN b ON a.key = b.key
+这样，JOIN的过程是，表a的BUCKET 1只会与表b中的BUCKET 1进行JOIN，而不再考虑表b中的其他BUCKET 2~32。
+如果上述表具有相同的BUCKET，如都是32个，而且还是排序的，亦即，在表定义中在CLUSTERED BY(key)后面增加如下约束：
+SORTED BY(key)
+则上述JOIN语句会执行一个Sort-Merge-Bucket (SMB) JOIN，同样需要设置如下参数来改变默认行为，优化JOIN时只遍历相关的BUCKET即可：
+set hive.input.format=org.apache.hadoop.hive.ql.io.BucketizedHiveInputFormat;
+set hive.optimize.bucketmapjoin = true;
+set hive.optimize.bucketmapjoin.sortedmerge = true;

@@ -1,0 +1,95 @@
+https://cwiki.apache.org/confluence/display/Hive/HiveDeveloperFAQ#HiveDeveloperFAQ-Mavensettings
+
+How do I import into Eclipse?
+Build and generate Eclipse files (the conservative method):
+$ mkdir workspace
+$ cd workspace
+$ git clone https://github.com/apache/hive.git
+$ cd hive
+$ mvn clean install -DskipTests
+$ mvn eclipse:clean
+$ mvn eclipse:eclipse -DdownloadSources -DdownloadJavadocs
+$ cd itests
+$ mvn clean install -DskipTests
+$ mvn eclipse:clean
+$ mvn eclipse:eclipse -DdownloadSources -DdownloadJavadocs
+In Eclipse define M2_REPO in Preferences -> Java -> Build Path -> Classpath Variables to either:
+Mac Example
+/Users/$USER/.m2/repository
+Linux Example
+/home/$USER/.m2/repository
+Windows Example
+C:/users/$USER/.m2/repository
+Then import the workspaces. If you get an error about "restricted use of Signal" for Beeline and CLI, follow these instructions.
+Note that if you use the Hive git base directory as the Eclipse workspace, then it does not pick the right project names (for example, picks 'ant' instead of 'hive-ant'). Therefore it's recommended to have the workspace directory one up from the git directory. For example workspaces/hive-workspace/hive where hive-workspace is the Eclipse workspace and hive is the git base directory.
+
+
+How to generate tarball?
+MVN:
+mvn clean package -DskipTests -Pdist
+It will then be located in the packaging/target/ directory.
+How to generate protobuf code?
+MVN:
+cd ql
+mvn clean install -DskipTests -Pprotobuf
+
+
+
+How to generate Thrift code?
+MVN:
+mvn clean install -Pthriftif -DskipTests -Dthrift.home=/usr/local
+How to run findbugs after a change?
+mvn site -Pfindbugs
+Note:  Available in Hive 1.1.0 onward (see HIVE-8327).
+
+
+
+How to compile ODBC?
+MVN:
+cd odbc
+mvn compile -Podbc -Dthrift.home=/usr/local -Dboost.home=/usr/local
+How do I publish Hive artifacts to my local Maven repository?
+ant package
+ant -Dmvn.publish.repo=local maven-build
+ant -Dmvn.publish.repo=local maven-publish
+MVN:
+mvn clean install -DskipTests
+cd itests
+mvn clean install -DskipTests
+Testing
+For general information, see Unit Tests and Debugging in the Developer Guide.
+
+
+How do I run precommit tests on a patch?
+Hive precommit testing is triggered automatically when a file is uploaded to the JIRA ticket:
+Attach the patch file to a JIRA ticket: in the ticket's "More" tab, select "Attach Files" and use "Choose File" to upload the file, then add a descriptive comment.
+Put the patch in the review queue: click the "Submit Patch" button. The button name will change to "Cancel Patch" and the ticket status will change to Patch Available.
+See Hive PreCommit Patch Testing for more detail.
+How do I rerun precommit tests over the same patch?
+For patch updates, our convention is to number them like HIVE-1856.1.patch, HIVE-1856.2.patch, etc. And then click the "Submit Patch" button again when a new one is uploaded; this makes sure it gets back into the review queue.
+How do I run a single test?
+ITests
+Note that any test in the itests directory needs to be executed from within the itests directory. The pom is disconnected from the parent project for technical reasons.
+Single test class:
+mvn test -Dtest=ClassName
+Single test method:
+mvn test -Dtest=ClassName#methodName
+Note that a pattern can also be supplied to -Dtests to run multiple tests matching the pattern:
+mvn test -Dtest='org.apache.hive.beeline.*'
+For more usage see the documentation for the Maven Surefire Plugin.
+How do I run all of the unit tests?
+mvn test
+cd itests
+mvn test
+Note that you need to have previously built and installed the jars:
+mvn clean install -DskipTests
+cd itests
+mvn clean install -DskipTests
+Legacy information for the Ant build
+Make sure that your JAVA_HOME is appropriately set (some tests need this), and set ANT_OPTS to increase the size allocated to the Permanent Generation as per the following:
+export ANT_OPTS="-XX:MaxPermSize=512m"
+Then, for a clean build, run
+ant clean package test
+Note that running ant test will not work; ant package does some setup work that is required for the testcases to run successfully.
+How do I run all of the unit tests except for a certain few tests?
+Similar to running all tests, but define test.excludes.additional to specify a test/pattern to exclude from the test run. For example the following will run all tests except for the CliDriver tests:

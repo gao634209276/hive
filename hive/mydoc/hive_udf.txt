@@ -1,0 +1,81 @@
+UDF  操作单个数据行，产生单个数据行；
+
+1.
+[hadoop@h91 hhh]$ vi TimeFormat.java
+
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import org.apache.hadoop.hive.ql.exec.UDF;
+public class TimeFormat extends UDF {
+ public String evaluate(String num){
+  Date d=new Date(Long.decode(num));
+  SimpleDateFormat sdf =new SimpleDateFormat("yyyy-MM-dd HH:MM:SS");
+  return sdf.format(d) ;
+ }
+}
+
+
+2.打包
+[hadoop@h91 hhh]$ /usr/jdk1.7.0_25/bin/javac -classpath /home/hadoop/hadoop-0.20.2-cdh3u5/hadoop-core-0.20.2-cdh3u5.jar:/home/hadoop/hive-0.9.0-bin/lib/hive-exec-0.9.0.jar TimeFormat.java 
+
+[hadoop@h91 hhh]$ vi main.mf
+Manifest-Version: 1.0
+
+[hadoop@h91 hhh]$ /usr/jdk1.7.0_25/bin/jar cvfm TF.jar main.mf TimeFormat.class 
+
+3.
+hive> add jar /home/hadoop/hhh/TF.jar;
+hive> CREATE TEMPORARY FUNCTION TFF AS 'TimeFormat';
+
+create table ss(id bigint)
+     row format delimited
+     fields terminated by '\t'
+     stored as textfile;
+
+
+hive> load data local inpath '/home/hadoop/c.txt' into table ss;
+
+[hadoop@h851 ~]$ date +%s （显示当前时间 转换成秒）
+（时间戳为 把时间转换成秒 *1000 变为 毫秒点位）
+
+[hadoop@h851 ~]$ vi c.txt 
+1417792627000
+
+
+
+TFF把时间戳 转换为 ("yyyy-MM-dd HH:MM:SS")
+hive> select TFF(time) from ha;
+
+
+-----------------------------------------------
+[hadoop@h91 hhh]$ vi hello.java 
+import org.apache.hadoop.hive.ql.exec.UDF;
+public class hello extends UDF {
+    public String evaluate(String str) {
+
+        try {
+
+            return "HelloWorld " + str;
+
+        } catch (Exception e) {
+
+            return null;
+
+        }
+    }
+}
+
+2.打包
+[hadoop@h91 hhh]$ /usr/jdk1.7.0_25/bin/javac -classpath /home/hadoop/hadoop-0.20.2-cdh3u5/hadoop-core-0.20.2-cdh3u5.jar:/home/hadoop/hive-0.9.0-bin/lib/hive-exec-0.9.0.jar hello.java 
+
+[hadoop@h91 hhh]$ vi main.mf
+Manifest-Version: 1.0
+
+[hadoop@h91 hhh]$ /usr/jdk1.7.0_25/bin/jar cvfm H.jar main.mf hello.class 
+
+3.
+hive> add jar /home/hadoop/hhh/H.jar;
+hive> CREATE TEMPORARY FUNCTION HH AS 'hello';
+
+hive> select HH(name) from ha;
+

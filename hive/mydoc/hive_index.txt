@@ -1,0 +1,210 @@
+
+1.如何对表创建索引？
+2.与创建表有什么区别？
+
+索引是标准的数据库技术，hive 0.7版本之后支持索引。Hive提供有限的索引功能，这不像传统的关系型数据库那样有“键(key)”的概念，用户可以在某些列上创建索引来加速某些操作，给一个表创建的索引数据被保存在另外的表中。 Hive的索引功能现在还相对较晚，提供的选项还较少。但是，索引被设计为可使用内置的可插拔的java代码来定制，用户可以扩展这个功能来满足自己的需求。 当然不是说有的查询都会受惠于Hive索引。用户可以使用EXPLAIN语法来分析HiveQL语句是否可以使用索引来提升用户查询的性能。像RDBMS中的索引一样，需要评估索引创建的是否合理，毕竟，索引需要更多的磁盘空间，并且创建维护索引也会有一定的代价。 用户必须要权衡从索引得到的好处和代价。
+
+下面说说怎么创建索引：
+1、先创建表：
+hive> create table user( id int, name string)
+    > ROW FORMAT DELIMITED
+    > FIELDS TERMINATED BY '\t'
+    > STORED AS TEXTFILE;
+复制代码
+
+2、导入数据：
+hive> load data local inpath '/export1/tmp/wyp/row.txt'
+    > overwrite into table user;
+复制代码
+
+3、创建索引之前测试
+hive> select * from user where id =500000;
+Total MapReduce jobs = 1
+Launching Job 1 out of 1
+Number of reduce tasks is set to 0 since there's no reduce operator
+Cannot run job locally: Input Size (= 356888890) is larger than
+hive.exec.mode.local.auto.inputbytes.max (= 134217728)
+Starting Job = job_1384246387966_0247, Tracking URL =
+
+http://l-datalogm1.data.cn1:9981/proxy/application_1384246387966_0247/
+
+Kill Command=/home/q/hadoop/bin/hadoop job -kill job_1384246387966_0247
+Hadoop job information for Stage-1: number of mappers:2; number of reducers:0
+2013-11-13 15:09:53,336 Stage-1 map = 0%,  reduce = 0%
+2013-11-13 15:09:59,500 Stage-1 map=50%,reduce=0%, Cumulative CPU 2.0 sec
+2013-11-13 15:10:00,531 Stage-1 map=100%,reduce=0%, Cumulative CPU 5.63 sec
+2013-11-13 15:10:01,560 Stage-1 map=100%,reduce=0%, Cumulative CPU 5.63 sec
+MapReduce Total cumulative CPU time: 5 seconds 630 msec
+Ended Job = job_1384246387966_0247
+MapReduce Jobs Launched:
+Job 0: Map: 2   Cumulative CPU: 5.63 sec
+HDFS Read: 361084006 HDFS Write: 357 SUCCESS
+Total MapReduce CPU Time Spent: 5 seconds 630 msec
+OK
+500000 wyp.
+Time taken: 14.107 seconds, Fetched: 1 row(s)
+复制代码
+
+
+一共用了14.107s
+
+4、对user创建索引
+hive> create index user_index on table user(id)
+    > as 'org.apache.hadoop.hive.ql.index.compact.CompactIndexHandler'
+    > with deferred rebuild
+    > IN TABLE user_index_table;
+hive> alter index user_index on user rebuild;
+hive> select * from user_index_table limit 5;
+0       hdfs://mycluster/user/hive/warehouse/table02/000000_0   [0]
+1       hdfs://mycluster/user/hive/warehouse/table02/000000_0   [352]
+2       hdfs://mycluster/user/hive/warehouse/table02/000000_0   [704]
+3       hdfs://mycluster/user/hive/warehouse/table02/000000_0   [1056]
+4       hdfs://mycluster/user/hive/warehouse/table02/000000_0   [1408]
+Time taken: 0.244 seconds, Fetched: 5 row(s)
+
+
+这样就对user表创建好了一个索引。
+
+5、对创建索引后的user再进行测试
+hive> select * from user where id =500000;
+Total MapReduce jobs = 1
+Launching Job 1 out of 1
+Number of reduce tasks is set to 0 since there's no reduce operator
+Cannot run job locally: Input Size (= 356888890) is larger than
+hive.exec.mode.local.auto.inputbytes.max (= 134217728)
+Starting Job = job_1384246387966_0247, Tracking URL =
+
+http://l-datalogm1.data.cn1:9981/proxy/application_1384246387966_0247/
+
+Kill Command=/home/q/hadoop/bin/hadoop job -kill job_1384246387966_0247
+Hadoop job information for Stage-1: number of mappers:2; number of reducers:0
+2013-11-13 15:23:12,336 Stage-1 map = 0%,  reduce = 0%
+2013-11-13 15:23:53,240 Stage-1 map=50%,reduce=0%, Cumulative CPU 2.0 sec
+2013-11-13 15:24:00,253 Stage-1 map=100%,reduce=0%, Cumulative CPU 5.27 sec
+2013-11-13 15:24:01,650 Stage-1 map=100%,reduce=0%, Cumulative CPU 5.27 sec
+MapReduce Total cumulative CPU time: 5 seconds 630 msec
+Ended Job = job_1384246387966_0247
+MapReduce Jobs Launched:
+Job 0: Map: 2   Cumulative CPU: 5.63 sec
+HDFS Read: 361084006 HDFS Write: 357 SUCCESS
+Total MapReduce CPU Time Spent: 5 seconds 630 msec
+OK
+500000 wyp.
+Time taken: 13.042 seconds, Fetched: 1 row(s)
+时间用了13.042s这和没有创建索引的效果差不多。
+
+在Hive创建索引还存在bug：如果表格的模式信息来自SerDe，Hive将不能创建索引：
+hive> CREATE INDEX employees_index
+    > ON TABLE employees (country)
+    > AS 'org.apache.hadoop.hive.ql.index.compact.CompactIndexHandler'
+    > WITH DEFERRED REBUILD
+    > IDXPROPERTIES ('creator' = 'me','created_at' = 'some_time')
+    > IN TABLE employees_index_table
+    > COMMENT 'Employees indexed by country and name.';
+FAILED: Error in metadata: java.lang.RuntimeException:             \
+Check the index columns, they should appear in the table being indexed.
+FAILED: Execution Error, return code 1 from                       \
+org.apache.hadoop.hive.ql.exec.DDLTask
+复制代码
+
+这个bug发生在Hive0.10.0、0.10.1、0.11.0，在Hive0.12.0已经修复了，详情请参见：https://issues.apache.org/jira/browse/HIVE-4251
+
+
+
+
+
+
+
+
+
+create table TBL_FACT_SYMBIAN_PACKET(PROVICE_FK  INT,DATE_FK  INT,MODEL_FK  INT,COUNTRY_FK  INT,NETWORK_FK  INT,OSLAG_FK  INT,OS_FK  INT,NQ_SOFTWARE_VER  INT,SUBCOOP_FK  INT,NQ_SOFTWARE_TYPE_FK  INT,SCANTYPE_FK  INT,SCANID  STRING,NAME  STRING,SECURITY  STRING,CA_ISSUER  STRING,CA_SUBJECT  STRING,HAS_NOTE  STRING,VIRUS_NAME  STRING
+)partitioned BY(dt STRING) row format delimited fields terminated by '\t'
+
+STORED AS textfile
+
+load data local inpath '/home/boss/symbian_pkgs_20110529.log.hive' overwrite into table TBL_FACT_SYMBIAN_PACKET partition(dt='2011-05-29');
+
+1 创建索引
+create index index_model_fk on table TBL_FACT_SYMBIAN_PACKET(model_fk) AS 'org.apache.hadoop.hive.ql.index.compact.CompactIndexHandler' WITH DEFERRED REBUILD ;
+
+索引可以加快含有group by语句的查询的计算速度
+create index employees_index on table employees(country)
+as  'org.apache.hadoop.hive.ql.index.compact.CompactIndexHandler'
+with deferred rebuild
+in table employees_index_table ;
+
+2. 更新数据
+ALTER INDEX index_model_fk ON TBL_FACT_SYMBIAN_PACKET REBUILD;
+
+3. 删除索引
+drop index index_model_fk on tbl_fact_symbian_packet;
+
+4. 查看索引
+show index on tbl_fact_symbian_packet;
+
+
+
+
+1、Hive可以创建哪些索引？
+2、Hive如何创建分区索引、唯一性索引？
+
+Creating an Index -- 创建一个索引
+[sql]
+CREATE TABLE employees (
+  name         STRING,
+  salary       FLOAT,
+  subordinates ARRAY<STRING>,
+  deductions   MAP<STRING, FLOAT>,
+  address      STRUCT<street:STRING, city:STRING, state:STRING, zip:INT>
+)
+PARTITIONED BY (country STRING, state STRING);
+
+Let’s index on the country partition only:（让我们唯一分区索引）
+[sql]
+CREATE INDEX employees_index
+ON TABLE employees (country)
+AS 'org.apache.hadoop.hive.ql.index.compact.CompactIndexHandler'
+WITH DEFERRED REBUILD
+IDXPROPERTIES ('creator' = 'me', 'created_at' = 'some_time')
+IN TABLE employees_index_table
+PARTITIONED BY (country, name)
+COMMENT 'Employees indexed by country and name.';
+
+Bitmap Indexes
+Hive v0.8.0 adds a built-in bitmap index handler. Bitmap indexes are commonly used
+for columns with few distinct values. Here is our previous example rewritten to use the
+bitmap index handler:
+（Hive 0.8.0添加了一个内置的位图索引处理程序。位图索引是常用的具有几个不同值的列。这是我们的前一个例子重写使用，位图索引处理程序:）
+[sql]
+CREATE INDEX employees_index
+ON TABLE employees (country)
+AS 'BITMAP'
+WITH DEFERRED REBUILD
+IDXPROPERTIES ('creator' = 'me', 'created_at' = 'some_time')
+IN TABLE employees_index_table
+PARTITIONED BY (country, name)
+COMMENT 'Employees indexed by country and name.';
+
+
+Rebuilding the Index
+（重建索引）
+[sql]
+ALTER INDEX employees_index
+ON TABLE employees
+PARTITION (country = 'US')
+REBUILD;
+
+
+Showing an Index
+（查看索引）
+[sql]
+SHOW FORMATTED INDEX ON employees;
+
+
+Dropping an Index
+（删除索引）
+[sql]
+DROP INDEX IF EXISTS employees_index ON TABLE employees;
+
+
+

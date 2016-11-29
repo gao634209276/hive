@@ -1,0 +1,53 @@
+1.分区
+
+
+
+分区是以字段的形式在表结构中存在，通过describe table命令可以查看到字段存在， 但是该字段不存放实际的数据内容，仅仅是分区的表示（伪列）。
+
+
+
+（1）静态分区
+
+create table if not exists sopdm.wyp2(id int,name string,tel string)
+
+partitioned by(age int)
+
+row format delimited
+
+fields terminated by ','
+
+stored as textfile;
+
+
+
+ --overwrite是覆盖，into是追加
+
+insert into table sopdm.wyp2
+
+partition(age='25')
+
+select id,name,tel from sopdm.wyp;
+
+
+
+（2）动态分区
+
+--设置为true表示开启动态分区功能（默认为false）
+
+set hive.exec.dynamic.partition=true;
+
+--设置为nonstrict,表示允许所有分区都是动态的（默认为strict）
+
+set hive.exec.dynamic.partition.mode=nonstrict;
+
+
+
+--insert overwrite是覆盖，insert into是追加
+
+set hive.exec.dynamic.partition.mode=nonstrict;
+
+insert overwrite table sopdm.wyp2
+
+partition(age)
+
+select id,name,tel,age from sopdm.wyp;

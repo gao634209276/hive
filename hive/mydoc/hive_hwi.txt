@@ -1,0 +1,187 @@
+下载hive1.2.1源码
+一、下载hive-src.tar
+
+[hadoop@hftest0001 ~]$ pwd
+/home/hadoop
+
+[hadoop@hftest0001 ~]$ wget
+
+[hadoop@hftest0001 ~]$ tar -zxvf apache-hive-1.2.1-src.tar.gz
+
+[hadoop@hftest0001 hwi]$ cd  /home/hadoop/apache-hive-1.2.1-src/hwi
+
+[hadoop@hftest0001 hwi]$ pwd
+/home/hadoop/apache-hive-1.2.1-src/hwi
+
+[hadoop@hftest0001 hwi]$ jar cfM hive-hwi-1.2.1.war -C web .
+
+[hadoop@hftest0001 hwi]$ cp hive-hwi-1.2.1.war /home/hadoop/apache-hive-1.2.1-bin/lib/
+二、启动 troubleshooting
+
+[root@hftest0001 apache-hive-1.2.1-bin]# pwd
+/home/hadoop/apache-hive-1.2.1-bin
+[root@hftest0001 apache-hive-1.2.1-bin]# ./bin/hive --service hwi
+16/01/25 09:37:25 INFO hwi.HWIServer: HWI is starting up
+16/01/25 09:37:27 FATAL hwi.HWIServer: HWI WAR file not found at /home/hadoop/apache-hive-1.2.1-bin/home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war
+[root@hftest0001 apache-hive-1.2.1-bin]#
+
+系统默认会找/home/hadoop/apache-hive-1.2.1-bin/home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war，多了目录
+
+修改配置文件，使用绝对路径
+
+[root@hftest0001 apache-hive-1.2.1-bin]# vi conf/hive-site.xml
+...
+...
+<!--hwi -->
+        <property>
+                <name>hive.hwi.listen.host</name>
+                <value>10.224.246.232</value>
+        </property>
+        <property>
+                <name>hive.hwi.listen.port</name>
+                <value>9999</value>
+        </property>
+        <property>
+                <name>hive.hwi.war.file</name>
+                <value>/home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war</value>
+        </property>
+
+[root@hftest0001 apache-hive-1.2.1-bin]# ./bin/hive --service hwi
+16/01/25 09:37:25 INFO hwi.HWIServer: HWI is starting up
+16/01/25 09:37:27 FATAL hwi.HWIServer: HWI WAR file not found at /home/hadoop/apache-hive-1.2.1-bin/home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war
+[root@hftest0001 apache-hive-1.2.1-bin]#
+
+系统还是会找/home/hadoop/apache-hive-1.2.1-bin/home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war，多了目录
+
+即不能使用绝对路径，要使用相对路径
+[root@hftest0001 apache-hive-1.2.1-bin]# vi conf/hive-site.xml
+...
+...
+<!--hwi -->
+        <property>
+                <name>hive.hwi.listen.host</name>
+                <value>10.224.246.232</value>
+        </property>
+        <property>
+                <name>hive.hwi.listen.port</name>
+                <value>9999</value>
+        </property>
+        <property>
+                <name>hive.hwi.war.file</name>
+                <value>lib/hive-hwi-1.2.1.war</value>
+        </property>
+
+[root@hftest0001 apache-hive-1.2.1-bin]# ./bin/hive --service hwi
+16/01/25 09:40:20 INFO hwi.HWIServer: HWI is starting up
+16/01/25 09:40:21 INFO mortbay.log: Logging to org.slf4j.impl.Log4jLoggerAdapter(org.mortbay.log) via org.mortbay.log.Slf4jLog
+16/01/25 09:40:21 INFO mortbay.log: jetty-6.1.26
+16/01/25 09:40:21 INFO mortbay.log: Extract /home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war to /tmp/Jetty_10_224_246_232_9999_hive.hwi.1.2.1.war__hwi__ms4vvn/webapp
+16/01/25 09:40:21 INFO mortbay.log: NO JSP Support for /hwi, did not find org.apache.jasper.servlet.JspServlet
+16/01/25 09:40:22 INFO mortbay.log: Started SocketConnector@10.224.246.232:9999
+
+报错：NO JSP Support for /hwi, did not find org.apache.jasper.servlet.JspServlet
+
+缺少jar： 下载jar，并放到lib目录下
+jasper-compiler-5.5.23.jar
+jasper-runtime-5.5.23.jar
+
+<dependency>
+	<groupId>tomcat</groupId>
+	<artifactId>jasper-compiler</artifactId>
+	<version>5.5.23</version>
+</dependency>
+
+<dependency>
+	<groupId>tomcat</groupId>
+	<artifactId>jasper-runtime</artifactId>
+	<version>5.5.23</version>
+</dependency>
+
+[root@hftest0001 apache-hive-1.2.1-bin]# ll lib/ | grep jasper
+-rw-rw-r--  1 hadoop root   408133 Jan 25 09:13 jasper-compiler-5.5.23.jar
+-rw-rw-r--  1 hadoop root    76844 Jan 25 09:14 jasper-runtime-5.5.23.jar
+
+
+[root@hftest0001 apache-hive-1.2.1-bin]# ./bin/hive --service hwi
+16/01/25 09:42:53 INFO hwi.HWIServer: HWI is starting up
+16/01/25 09:42:55 INFO mortbay.log: Logging to org.slf4j.impl.Log4jLoggerAdapter(org.mortbay.log) via org.mortbay.log.Slf4jLog
+16/01/25 09:42:55 INFO mortbay.log: jetty-6.1.26
+16/01/25 09:42:55 INFO mortbay.log: Extract /home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war to /tmp/Jetty_10_224_246_232_9999_hive.hwi.1.2.1.war__hwi__ms4vvn/webapp
+16/01/25 09:42:55 INFO mortbay.log: Started SocketConnector@10.224.246.232:9999
+
+成功！！！
+访问
+
+java.lang.NoClassDefFoundError: org/apache/commons/el/ExpressionEvaluatorImpl
+	at org.apache.jasper.compiler.JspUtil.<clinit>(JspUtil.java:62)
+	at org.apache.jasper.JspCompilationContext.getServletClassName(JspCompilationContext.java:335)
+	at org.apache.jasper.JspCompilationContext.getClassFileName(JspCompilationContext.java:485)
+	at org.apache.jasper.compiler.Compiler.isOutDated(Compiler.java:380)
+	at org.apache.jasper.compiler.Compiler.isOutDated(Compiler.java:333)
+	at org.apache.jasper.JspCompilationContext.compile(JspCompilationContext.java:561)
+	at org.apache.jasper.servlet.JspServletWrapper.service(JspServletWrapper.java:299)
+	at org.apache.jasper.servlet.JspServlet.serviceJspFile(JspServlet.java:315)
+	at org.apache.jasper.servlet.JspServlet.service(JspServlet.java:265)
+	at javax.servlet.http.HttpServlet.service(HttpServlet.java:820)
+	at org.mortbay.jetty.servlet.ServletHolder.handle(ServletHolder.java:511)
+	at org.mortbay.jetty.servlet.ServletHandler.handle(ServletHandler.java:401)
+	at org.mortbay.jetty.security.SecurityHandler.handle(SecurityHandler.java:216)
+	at org.mortbay.jetty.servlet.SessionHandler.handle(SessionHandler.java:182)
+	at org.mortbay.jetty.handler.ContextHandler.handle(ContextHandler.java:766)
+	at org.mortbay.jetty.webapp.WebAppContext.handle(WebAppContext.java:450)
+	at org.mortbay.jetty.servlet.Dispatcher.forward(Dispatcher.java:327)
+	at org.mortbay.jetty.servlet.Dispatcher.forward(Dispatcher.java:126)
+	at org.mortbay.jetty.servlet.DefaultServlet.doGet(DefaultServlet.java:503)
+	at javax.servlet.http.HttpServlet.service(HttpServlet.java:707)
+	at javax.servlet.http.HttpServlet.service(HttpServlet.java:820)
+	at org.mortbay.jetty.servlet.ServletHolder.handle(ServletHolder.java:511)
+	at org.mortbay.jetty.servlet.ServletHandler.handle(ServletHandler.java:401)
+	at org.mortbay.jetty.security.SecurityHandler.handle(SecurityHandler.java:216)
+	at org.mortbay.jetty.servlet.SessionHandler.handle(SessionHandler.java:182)
+	at org.mortbay.jetty.handler.ContextHandler.handle(ContextHandler.java:766)
+	at org.mortbay.jetty.webapp.WebAppContext.handle(WebAppContext.java:450)
+	at org.mortbay.jetty.handler.HandlerWrapper.handle(HandlerWrapper.java:152)
+	at org.mortbay.jetty.handler.RequestLogHandler.handle(RequestLogHandler.java:49)
+	at org.mortbay.jetty.handler.HandlerWrapper.handle(HandlerWrapper.java:152)
+	at org.mortbay.jetty.Server.handle(Server.java:326)
+	at org.mortbay.jetty.HttpConnection.handleRequest(HttpConnection.java:542)
+	at org.mortbay.jetty.HttpConnection$RequestHandler.headerComplete(HttpConnection.java:928)
+	at org.mortbay.jetty.HttpParser.parseNext(HttpParser.java:549)
+	at org.mortbay.jetty.HttpParser.parseAvailable(HttpParser.java:212)
+	at org.mortbay.jetty.HttpConnection.handle(HttpConnection.java:404)
+	at org.mortbay.jetty.bio.SocketConnector$Connection.run(SocketConnector.java:228)
+	at org.mortbay.thread.QueuedThreadPool$PoolThread.run(QueuedThreadPool.java:582)
+Caused by: java.lang.ClassNotFoundException: org.apache.commons.el.ExpressionEvaluatorImpl
+	at java.net.URLClassLoader$1.run(URLClassLoader.java:366)
+	at java.net.URLClassLoader$1.run(URLClassLoader.java:355)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at java.net.URLClassLoader.findClass(URLClassLoader.java:354)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:425)
+	at sun.misc.Launcher$AppClassLoader.loadClass(Launcher.java:308)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:358)
+	... 38 more
+
+
+仍然缺少jar：下载jar，并放置到lib目录下
+commons-el-1.0.jar
+
+<dependency>
+	<groupId>commons-el</groupId>
+	<artifactId>commons-el</artifactId>
+	<version>1.0</version>
+</dependency>
+
+
+[root@hftest0001 apache-hive-1.2.1-bin]# ll lib/ | grep commons-el
+-rw-rw-r--  1 hadoop root   112341 Jan 25 09:30 commons-el-1.0.jar
+[root@hftest0001 apache-hive-1.2.1-bin]#
+
+[root@hftest0001 apache-hive-1.2.1-bin]# ./bin/hive --service hwi
+16/01/25 09:42:53 INFO hwi.HWIServer: HWI is starting up
+16/01/25 09:42:55 INFO mortbay.log: Logging to org.slf4j.impl.Log4jLoggerAdapter(org.mortbay.log) via org.mortbay.log.Slf4jLog
+16/01/25 09:42:55 INFO mortbay.log: jetty-6.1.26
+16/01/25 09:42:55 INFO mortbay.log: Extract /home/hadoop/apache-hive-1.2.1-bin/lib/hive-hwi-1.2.1.war to /tmp/Jetty_10_224_246_232_9999_hive.hwi.1.2.1.war__hwi__ms4vvn/webapp
+16/01/25 09:42:55 INFO mortbay.log: Started SocketConnector@10.224.246.232:9999
+
+成功！！！
+访问 http://10.224.246.232:9999/hwi/
