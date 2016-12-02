@@ -13,6 +13,10 @@ import org.apache.hadoop.mapred.RecordWriter;
 import org.apache.hadoop.mapred.TextOutputFormat;
 import org.apache.hadoop.util.Progressable;
 
+/**
+ * OutputFormat负责写入，这里要注意的是，不能再照抄Hadoop的对应接口了，需要实现HiveOutputFormat。
+ */
+@SuppressWarnings("rawtypes")
 public class DocFileOutputFormat<K extends WritableComparable, V extends Writable>
 		extends TextOutputFormat<K, V>
 		implements HiveOutputFormat<K, V> {
@@ -20,6 +24,7 @@ public class DocFileOutputFormat<K extends WritableComparable, V extends Writabl
 	@Override
 	public RecordWriter<K, V> getRecordWriter(FileSystem ignored, JobConf job,
 			String name, Progressable progress) throws IOException {
+		
 		return null;
 	}
 

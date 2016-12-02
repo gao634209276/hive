@@ -1,4 +1,4 @@
-package inputformat;
+package inputformat.doc;
 
 import java.io.IOException;
 
@@ -9,6 +9,10 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.LineRecordReader;
 import org.apache.hadoop.mapred.RecordReader;
 
+/**
+ * DocInputFormat中，只是简单的实现了接口。
+ * 对文档进行切分的业务逻辑，在DocRecordReader中完成。
+ */
 public class DocRecordReader implements RecordReader<LongWritable, Text> {
 	// Reader
 	private LineRecordReader reader;
