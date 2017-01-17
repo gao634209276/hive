@@ -6,7 +6,7 @@
 		alter table tb change column c1 c2 int comment 'xxx' after severity;
 		//可以把该列放到指定列的后面,或者使用'first'放到第一位
 	增加列
-		alter talbe tb add columns (c1 string comment 'xxx',c2 long comment 'yyy')
+		alter table tb add columns (c1 string comment 'xxx',c2 long comment 'yyy')
 
 
 实例

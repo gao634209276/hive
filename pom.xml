@@ -1,7 +1,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>study</groupId>
+	<groupId>gao</groupId>
 	<artifactId>hive</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
@@ -11,7 +11,8 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<JAVA_HOME>C:\Program Files\Java\jdk1.7.0_80</JAVA_HOME>
+		<JAVA_HOME>C:\Program Files\Java\jdk1.7.0_79</JAVA_HOME>
+		<hive.version>1.2.1</hive.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -24,37 +25,37 @@
 		<dependency>
 			<groupId>org.apache.hive</groupId>
 			<artifactId>hive-common</artifactId>
-			<version>1.2.1</version>
+			<version>${hive.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hive</groupId>
 			<artifactId>hive-exec</artifactId>
-			<version>1.2.1</version>
+			<version>${hive.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-common</artifactId>
-			<version>2.7.2</version>
+			<version>2.5.2</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hive</groupId>
 			<artifactId>hive-serde</artifactId>
-			<version>1.2.1</version>
+			<version>${hive.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hive</groupId>
 			<artifactId>hive-jdbc</artifactId>
-			<version>1.2.1</version>
+			<version>${hive.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hive</groupId>
 			<artifactId>hive-service</artifactId>
-			<version>1.2.1</version>
+			<version>${hive.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.zookeeper</groupId>
 			<artifactId>zookeeper</artifactId>
-			<version>3.4.8</version>
+			<version>3.4.6</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.orc</groupId>
