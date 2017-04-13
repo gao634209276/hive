@@ -1,0 +1,236 @@
+只要是配置了正确的文件类型和压缩类型(比如Textfile+Gzip、SequenceFile+Snappy等)，Hive都可以按预期读取并解析数据，提供SQL功能。
+SequenceFile本身的结构已经设计了内容进行压缩。所以对于SequenceFile文件的压缩，并不是先生成SequenceFile文件，再对文件进行压缩。
+而是生成SequenceFile文件时，对其中的内容字段进行压缩。最终压缩后，对外仍体现为一个SequenceFile。
+
+RCFile、ORCFile、Parquet、Avro对于压缩的处理方式与SequenceFile相同。
+文件格式
+	Textfile:STORED AS TEXTFILE;
+	SequenceFile
+	RCFile
+	ORCFile
+	Parquet
+	Avro
+压缩算法的编解码器
+序号 	压缩格式 	算法 	多文件 	可分割性 	工具 	工具压缩后扩展名
+1 	DEFLATE 	DEFLATE 	不 	不 	无 	.deflate
+2 	Gzip 	DEFLATE 	不 	不 	gzip 	.gz
+3 	bzip2 	bzip2 	不 	是 	bzip2 	.bz2
+4 	LZO 	LZO 	不 	不 	lzop 	.lzo
+5 	LZ4 	??? 	?? 	?? 	??? 	???
+6 	Snappy 	??? 	?? 	?? 	??? 	???
+7 	ZLIB 	??? 	?? 	?? 	??? 	???
+8 	ZIP 	DEFLATE 	是 	是，在文件范围内 	zip 	.zip
+
+
+
+
+
+TEXTFILE
+	文本文件,非压缩
+		--创建一个表，格式为文本文件：
+			CREATE EXTERNAL TABLE student_text (id STRING, name STRING)
+			ROW FORMAT DELIMITED
+				FIELDS TERMINATED BY ','
+				LINES TERMINATED BY '\n'
+			STORED AS TEXTFILE;
+		--导入数据到此表中,将启动MR任务:INSERT OVERWRITE TABLE student_text ... SELECT * FROM ..;
+		可查看到生成的数据文件的格式为非压缩的文本文件：
+		hdfs dfs -cat /user/hive/warehouse/student_text/000000_0
+	文本文件,DEFLATE压缩
+		--创建一个表，格式为文件文件：CREATE ... STORED AS TEXTFILE;
+		--设置压缩类型为Gzip压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.DefaultCodec;
+		--导入数据:INSERT OVERWRITE TABLE student_text SELECT * FROM ..;
+		--查看数据:SELECT * FROM student_text_def;
+		查看数据文件,可看到数据文件为多个.deflate文件。
+			hdfs dfs -ls /user/hive/warehouse/student_text_def/
+			-rw-r--r--   2015-09-16 12:48 /user/hive/warehouse/student_text_def/000000_0.deflate
+			-rw-r--r--   2015-09-16 12:48 /user/hive/warehouse/student_text_def/000001_0.deflate
+			-rw-r--r--   2015-09-16 12:48 /user/hive/warehouse/student_text_def/000002_0.deflate
+	文本文件,Gzip压缩
+		--创建一个表，格式为文件文件：CREATE TABLE student_text_gzip ... STORED AS TEXTFILE;
+		--设置压缩类型为Gzip压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec;
+		--导入数据查看数据同上
+		查看数据文件,可看到数据文件为多个.gz文件。解开.gz文件，可以看到明文文本：
+			hdfs dfs -ls /user/hive/warehouse/student_text_gzip/
+			-rw-r--r--  2015-09-15 10:03 /user/hive/warehouse/student_text_gzip/000000_0.gz
+			-rw-r--r--  2015-09-15 10:03 /user/hive/warehouse/student_text_gzip/000001_0.gz
+			-rw-r--r--  2015-09-15 10:03 /user/hive/warehouse/student_text_gzip/000002_0.gz
+	文本文件,Bzip2压缩
+		--创建一个表，格式为文件文件：CREATE TABLE student_text_bzip2 ... STORED AS TEXTFILE;
+		--设置压缩类型为Bzip2压缩：
+		SET hive.exec.compress.output=true;
+		SET mapred.output.compress=true;
+		SET mapred.output.compression.codec=org.apache.hadoop.io.compress.BZip2Codec;
+		--导入数据查看数据同上
+		查看数据文件,可看到数据文件为多个.bz2文件。解开.bz2文件，可以看到明文文本：
+			hdfs dfs -cat /user/hive/warehouse/student_text/000000_0
+			-rw-r--r--  2015-09-15 10:09 /user/hive/warehouse/student_text_bzip2/000000_0.bz2
+			-rw-r--r--  2015-09-15 10:09 /user/hive/warehouse/student_text_bzip2/000001_0.bz2
+			-rw-r--r--  2015-09-15 10:09 /user/hive/warehouse/student_text_bzip2/000002_0.bz2
+	文本文件,lzo压缩
+		--创建一个表，格式为文件文件：CREATE TABLE student_text_lzo ... STORED AS TEXTFILE;
+		--设置为LZO压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression.codec=com.hadoop.compression.lzo.LzopCodec;
+		--导入数据查看数据同上
+		查看数据文件,可看到数据文件为多个.lzo压缩。解开.lzo文件，可以看到明文文本。
+
+	文本文件,lz4压缩
+		--创建表CREATE TABLE student_text_lz4 ... STORED AS TEXTFILE;
+		--设置为LZ4压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.Lz4Codec;
+		--导入数据查看数据同上
+		查看数据文件,可看到数据文件为多个.lz4压缩。使用cat查看.lz4文件，可以看到是压缩后的文本。
+			hdfs dfs -ls /user/hive/warehouse/student_text_lz4
+			-rw-r--r-- 2015-09-16 12:06 /user/hive/warehouse/student_text_lz4/000000_0.lz4
+			-rw-r--r-- 2015-09-16 12:06 /user/hive/warehouse/student_text_lz4/000001_0.lz4
+			-rw-r--r-- 2015-09-16 12:06 /user/hive/warehouse/student_text_lz4/000002_0.lz4
+
+	文本文件,Snappy压缩
+		--创建表:CREATE TABLE student_text_snappy (id STRING, name STRING) .. STORED AS TEXTFILE;
+		--设置压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.compress.map.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression=org.apache.hadoop.io.compress.SnappyCodec;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.SnappyCodec;
+			SET io.compression.codecs=org.apache.hadoop.io.compress.SnappyCodec;
+		--导入数据查看数据同上
+		查看数据文件,可看到数据文件为多个.snappy压缩文件。使用cat查看.snappy文件，可以看到是压缩后的文本:
+			hdfs dfs -ls /user/hive/warehouse/student_text_snappy
+			Found 3 items
+			-rw-r--r--   2015-09-15 16:42 /user/hive/warehouse/student_text_snappy/000000_0.snappy
+			-rw-r--r--   2015-09-15 16:42 /user/hive/warehouse/student_text_snappy/000001_0.snappy
+			-rw-r--r--   2015-09-15 16:42 /user/hive/warehouse/student_text_snappy/000002_0.snappy
+
+SEQUENCEFILE
+	Sequence文件,DEFLATE压缩
+		--创建一个表，格式为文件文件：
+			CREATE TABLE student_seq_def (id STRING, name STRING)
+			ROW FORMAT DELIMITED
+				FIELDS TERMINATED BY ','
+				LINES TERMINATED BY '\n'
+			STORED AS SEQUENCEFILE;
+		--设置压缩类型为Gzip压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.DefaultCodec;
+		--导入数据查看数据同上
+		查看数据文件,是一个密文的文件.
+			hdfs dfs -ls /user/hive/warehouse/student_seq_def/
+			-rw-r--r--  /user/hive/warehouse/student_seq_def/000000_0
+
+	Sequence文件,Gzip压缩
+		--创建一个表，格式为文件文件：
+			CREATE TABLE student_seq_gzip (id STRING, name STRING)...STORED AS SEQUENCEFILE;
+		--设置压缩类型为Gzip压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec;
+		--导入数据查看数据同上
+		查看数据文件,是一个密文的文件，无法通过gzip解压：
+			hdfs dfs -ls /user/hive/warehouse/student_seq_gzip/
+			-rw-r--r--  /user/hive/warehouse/student_seq_gzip/000000_0
+
+RCFILE
+	RCFILE,Gzip压缩
+		CREATE TABLE student_rcfile_gzip (id STRING, name STRING)
+		ROW FORMAT DELIMITED
+			FIELDS TERMINATED BY ','
+			LINES TERMINATED BY '\n'
+		STORED AS RCFILE;
+	--设置压缩类型为Gzip压缩
+		SET hive.exec.compress.output=true;
+		SET mapred.output.compress=true;
+		SET mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec;
+
+ORCFile
+ORCFile有自己的参数设置压缩格式，一般不使用上述Hive参数设置压缩参数。
+	参考文档:LanguageManual ORC
+		https://cwiki.apache.org/confluence/display/Hive/LanguageManual+ORC
+			1,CREATE TABLE ... STORED AS ORC
+			2,ALTER TABLE ... [PARTITION partition_spec] SET FILEFORMAT ORC
+			3,SET hive.default.fileformat=Orc
+	ORCFile,ZLIB压缩(orc默认zlib压缩，可以通过NONE设置不压缩）
+		--创建表
+			CREATE TABLE student_orcfile_zlib (id STRING, name STRING)
+			ROW FORMAT DELIMITED
+				FIELDS TERMINATED BY ','
+				LINES TERMINATED BY '\n'
+			STORED AS ORCFILE TBLPROPERTIES ("orc.compress"="ZLIB");
+		--导入数据查看数据同上
+
+	ORCFILE,Snappy压缩
+		--创建表
+			CREATE TABLE student_orcfile_snappy2 (id STRING, name STRING)
+			ROW FORMAT DELIMITED
+				FIELDS TERMINATED BY ','
+				LINES TERMINATED BY '\n'
+			STORED AS ORCFILE TBLPROPERTIES ("orc.compress"="SNAPPY");
+		--导入数据查看数据同上
+	一般不使用下述方式。下述方式压缩后，结果与上述同类型压缩(SNAPPY)不同。具体原因待进一步研究。
+		--创建表
+			CREATE TABLE student_orcfile_snappy (id STRING, name STRING)
+			ROW FORMAT DELIMITED
+				FIELDS TERMINATED BY ','
+				LINES TERMINATED BY '\n'
+			STORED AS ORCFILE;
+		--设置压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.compress.map.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression=org.apache.hadoop.io.compress.SnappyCodec;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.SnappyCodec;
+			SET io.compression.codecs=org.apache.hadoop.io.compress.SnappyCodec;
+		--导入数据查看数据同上
+
+Parquet
+	Parquet,Snappy压缩
+		--创建表
+			CREATE TABLE student_parquet_snappy (id STRING, name STRING)
+			ROW FORMAT DELIMITED
+				FIELDS TERMINATED BY ','
+				LINES TERMINATED BY '\n'
+			STORED AS PARQUET;
+		--设置压缩
+			SET hive.exec.compress.output=true;
+			SET mapred.compress.map.output=true;
+			SET mapred.output.compress=true;
+			SET mapred.output.compression=org.apache.hadoop.io.compress.SnappyCodec;
+			SET mapred.output.compression.codec=org.apache.hadoop.io.compress.SnappyCodec;
+			SET io.compression.codecs=org.apache.hadoop.io.compress.SnappyCodec;
+		--导入数据查看数据同上
+
+Avro
+	Avro,Snappy压缩
+	--创建表
+		CREATE TABLE student_avro_snappy (id STRING, name STRING)
+		ROW FORMAT DELIMITED
+			FIELDS TERMINATED BY ','
+			LINES TERMINATED BY '\n'
+		STORED AS AVRO;
+	--设置压缩
+		SET hive.exec.compress.output=true;
+		SET mapred.compress.map.output=true;
+		SET mapred.output.compress=true;
+		SET mapred.output.compression=org.apache.hadoop.io.compress.SnappyCodec;
+		SET mapred.output.compression.codec=org.apache.hadoop.io.compress.SnappyCodec;
+		SET io.compression.codecs=org.apache.hadoop.io.compress.SnappyCodec;
+
+Hive支持的文件格式与压缩算法(1.2.1)
+http://blog.csdn.net/houzhizhen/article/details/53097106
+
+Hive数据压缩笔记
+http://blog.csdn.net/cnbird2008/article/details/9182869
+
+Parquet与ORC性能测试报告
+http://blog.csdn.net/yu616568/article/details/51188479

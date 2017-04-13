@@ -62,6 +62,21 @@
 			<artifactId>orc-mapreduce</artifactId>
 			<version>1.1.0</version>
 		</dependency>
+		<dependency>
+			<groupId>com.facebook.presto.hive</groupId>
+			<artifactId>hive-apache</artifactId>
+			<version>0.14</version>
+		</dependency>
+		<dependency>
+			<groupId>com.facebook.presto.hive</groupId>
+			<artifactId>hive-apache</artifactId>
+			<version>0.14</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.hive</groupId>
+			<artifactId>hive-beeline</artifactId>
+			<version>0.14.0</version>
+		</dependency>
 	</dependencies>
 	<build>
 		<sourceDirectory>src</sourceDirectory>
