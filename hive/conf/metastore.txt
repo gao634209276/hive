@@ -1,0 +1,142 @@
+Hive的meta数据支持以下三种存储方式，其中两种属于本地存储，一种为远端存储。
+远端存储比较适合生产环境。Hive官方wiki详细介绍了这三种方式，链接为：Hive Metastore。
+一、本地derby
+	这种方式是最简单的存储方式，只需要在hive-site.xml做如下配置便可
+		<property>
+		  <name>javax.jdo.option.ConnectionURL</name>
+		  <value>jdbc:derby:;databaseName=metastore_db;create=true</value>
+		</property>
+		<property>
+		  <name>javax.jdo.option.ConnectionDriverName</name>
+		  <value>org.apache.derby.jdbc.EmbeddedDriver</value>
+		</property>
+		<property>
+		  <name>hive.metastore.local</name>
+		  <value>true</value>
+		</property>
+		<property>
+		  <name>hive.metastore.warehouse.dir</name>
+		  <value>/user/hive/warehouse</value>
+		</property>
+		<property>
+		  <name>hive.metastore.warehouse.dir</name>
+		  <value>/user/hive/warehouse</value>
+		</property>
+	注：使用derby存储方式时，运行hive会在当前目录生成一个derby文件和一个metastore_db目录。
+	这种存储方式的弊端是在同一个目录下同时只能有一个hive客户端能使用数据库，否则会提示如下错误
+
+二、本地mysql
+这种存储方式需要在本地运行一个mysql服务器，并作如下配置
+	（下面两种使用mysql的方式，需要将mysql的jar包拷贝到$HIVE_HOME/lib目录下）。
+		<property>
+		  <name>hive.metastore.warehouse.dir</name>
+		  <value>/user/hive_remote/warehouse</value>
+		</property>
+
+		<property>
+		  <name>hive.metastore.local</name>
+		  <value>true</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionURL</name>
+		  <value>jdbc:mysql://localhost/hive_remote?createDatabaseIfNotExist=true</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionDriverName</name>
+		  <value>com.mysql.jdbc.Driver</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionUserName</name>
+		  <value>hive</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionPassword</name>
+		  <value>password</value>
+		</property>
+
+三、远端mysql
+这种存储方式需要在远端服务器运行一个MySQL服务器，并且需要在Hive服务器启动meta服务。
+	这里用mysql的测试服务器，ip位192.168.1.214，新建hive_remote数据库，字符集位latine1
+		<property>
+		  <name>hive.metastore.warehouse.dir</name>
+		  <value>/user/hive/warehouse</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionURL</name>
+		  <value>jdbc:mysql://192.168.1.214:3306/hive_remote?createDatabaseIfNotExist=true</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionDriverName</name>
+		  <value>com.mysql.jdbc.Driver</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionUserName</name>
+		  <value>hive</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionPassword</name>
+		  <value>password</value>
+		</property>
+
+		<property>
+		  <name>hive.metastore.local</name>
+		  <value>false</value>
+		</property>
+
+		<property>
+		  <name>hive.metastore.uris</name>
+		  <value>thrift://192.168.1.188:9083</value>
+		</property>
+	注：这里把hive的服务端和客户端都放在同一台服务器上了。
+	服务端和客户端可以拆开，将hive-site.xml配置文件拆为如下两部分
+	1）、服务端配置文件
+		<property>
+		  <name>hive.metastore.warehouse.dir</name>
+		  <value>/user/hive/warehouse</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionURL</name>
+		  <value>jdbc:mysql://192.168.1.214:3306/hive_remote?createDatabaseIfNotExist=true</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionDriverName</name>
+		  <value>com.mysql.jdbc.Driver</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionUserName</name>
+		  <value>root</value>
+		</property>
+
+		<property>
+		  <name>javax.jdo.option.ConnectionPassword</name>
+		  <value>test1234</value>
+		</property>
+	2）、客户端配置文件
+		<property>
+		  <name>hive.metastore.warehouse.dir</name>
+		  <value>/user/hive/warehouse</value>
+		</property>
+
+		<property>
+		  <name>hive.metastore.local</name>
+		  <value>false</value>
+		</property>
+
+		<property>
+		  <name>hive.metastore.uris</name>
+		  <value>thrift://192.168.1.188:9083</value>
+		</property>
+	启动hive服务端程序
+		hive --service metastore
+	客户端直接使用hive命令即可
