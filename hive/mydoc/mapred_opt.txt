@@ -1,0 +1,26 @@
+MapReduce作业可以细分为map task和reduce task，而MRAppMaster又将map task和reduce task分为四种状态：
+
+　　1、pending：刚启动但尚未向resourcemanager发送资源请求；
+
+　　2、scheduled：已经向resourceManager发送资源请求，但尚未分配到资源；
+
+　　3、assigned：已经分配到了资源且正在运行；
+
+　　4、completed：已经运行完成。
+
+　　map task的生命周期为：scheduled -> assigned -> completed
+　　reduce task 生命周期：pending -> scheduled -> assigned -> completed。
+
+　　由于reduce task的执行需要依赖于map task的输出结果，因此，为避免reduce task过早启动造成资源利用率底下，MRAppMaster让刚启动的reduce处于pending状态，以便能够根据map task的运行情况决定是否对其进行调度。
+
+　　那么如何确定reduce task启动时机呢？因为YARN没有Hadoop 1.x里面的map slot和reduce slot概念，且ResourceManager也不知道map task和reduce task之间的依赖关系，因此MRAppMaster自己需要设计资源申请策略以防止因reduce task过早启动照成资源利用率低下和map task因分配不到资源而饿死。MRAppMaster在MRv1原有策略（map task完成数目达到一定比例后才允许启动reduce task）基础上添加了更为严格的资源控制策略和抢占策略，这里主要涉及到以下三个参数：
+
+　　mapreduce.job.reduce.slowstart.completedmaps：其英文含义是：Fraction of the number of maps in the job which should be complete before reduces are scheduled for the job。当map task完成的比例达到该值后才会为reduce task申请资源，默认是0.05。
+
+　　yarn.app.mapreduce.am.job.reduce.rampup.limit：在map task完成之前，最多启动reduce task比例，默认是0.5
+
+　　yarn.app.mapreduce.am.job.reduce.preemption.limit：当map task需要资源但暂时无法获取资源（比如reduce task运行过程中，部分map task因结果丢失需重算）时，为了保证至少一个map task可以得到资源，最多可以抢占reduce task比例，默认是0.5
+
+　　如果上面三个参数设置的不合理可能会出现提交的job出现大量的reduce被kill掉，这个问题其实是reduce 任务启动时机的问题，由于yarn中没有map slot和reduce slot的概念，且ResourceManager也不知道map task和reduce task之间的依赖关系，因此MRAppMaster自己需要设计资源申请策略以防止因reduce task过早启动照成资源利用率低下和map task因分配不到资源而饿死，然后通过抢占机制，大量reduce任务被kill掉。可以合理调节上面三个配置参数来消除这种情况。
+
+http://www.cnblogs.com/itboys/p/5769057.html
