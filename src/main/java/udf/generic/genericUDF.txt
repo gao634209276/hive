@@ -1,0 +1,48 @@
+复杂的API
+	org.apache.hadoop.hive.ql.udf.generic.GenericUDF
+	该API提供了一种方法去处理那些不是可写类型的对象，例如：struct，map和array类型。
+	这个API需要你亲自去为函数的参数去管理对象存储格式（object inspectors），验证接收的参数的数量与类型。
+	一个object inspector为内在的数据类型提供一个一致性接口，以至不同实现的对象可以在hive中以一致的方式去访问
+	（例如，只要你能提供一个对应的object inspector，你可以实现一个如Map的复合对象）。
+
+	这个API要求你去实现以下方法：
+	    // 这个类似于简单API的evaluate方法，它可以读取输入数据和返回结果
+	    abstract Object evaluate(GenericUDF.DeferredObject[] arguments);
+
+	    // 该方法无关紧要，我们可以返回任何东西，但应当是描述该方法的字符串
+	    abstract String getDisplayString(String[] children);
+
+	    // 只调用一次，在任何evaluate()调用之前，你可以接收到一个可以表示函数输入参数类型的object inspectors数组
+	    // 这是你用来验证该函数是否接收正确的参数类型和参数个数的地方
+	    abstract ObjectInspector initialize(ObjectInspector[] arguments);
+
+示例
+	根据该list中是否包含所提供的string来返回true或者false，如下：
+	containsString(List("a", "b", "c"), "b"); // true
+	containsString(List("a", "b", "c"), "d"); // false
+	不同于UDF接口，这个GenericUDF接口需要更啰嗦点。
+
+代码走读
+函数的调用模块如下：
+	1、该UDF用默认的构造器来初始化
+
+	2、udf.initialize() 被调用，传入udf参数的object instructors数组，（ListObjectInstructor, StringObjectInstructor）
+		1) 检查传人的参数有两个与该参数的数据类型是正确的（见上面）
+		2) 我们保存object instructors用以供evaluate()使用（listOI, elementOI）
+		3) 返回 object inspector，让Hive能够读取该函数的返回结果（BooleanObjectInspector）
+
+	3、对于查询中的每一行，evaluate方法都会被调用，传人该行的指定的列（例如，evaluate(List(“a”, “b”, “c”), “c”) ）。
+		1) 我们利用initialize方法中存储的object instructors来抽取出正确的值。
+		2) 我们在这处理我们的逻辑然后用initialize返回的object inspector来序列化返回来的值(list.contains(elemement) ? true : false)。
+
+
+
+create temporary function add_months_str as 'udf.generic.UDFAddMonths';
+create temporary function add_months_str as 'udf.generic.MyAddMonthsUDF';
+create temporary function add_months_str1 as 'com.nexr.platform.hive.udf.UDFAddMonths';
+
+select add_months_str(date,1) from test;
+
+select add_months_str1(date,1) from test;
+
+

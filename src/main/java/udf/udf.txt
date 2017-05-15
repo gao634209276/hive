@@ -11,4 +11,16 @@
 如果你想浏览代码：fork it on Github：https://github.com/rathboma/hive-extension-examples
 
 简单API
-用简单UDF API来构建一个UDF只涉及到编写一个类继承实现一个方法（evaluate），以下是示例：
+	用简单UDF API来构建一个UDF只涉及到编写一个类继承实现一个方法（evaluate），
+	See : SimpleUDFExample.java
+	一个UDF 必须满足两个条件：
+		1. 必须继承 org.apache.Hadoop.hive.ql.exec.UDF类
+		2. 至少实现了一个 evaluate() 方法
+复杂API
+	see: genericUDF.txt
+
+
+参考:
+	http://www.cnblogs.com/ggjucheng/archive/2013/02/01/2888051.html
+	http://www.cnblogs.com/hd-zg/p/5947468.html
+	http://blog.csdn.net/gg584741/article/details/51769624

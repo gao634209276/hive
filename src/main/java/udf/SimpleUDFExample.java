@@ -12,6 +12,7 @@ public class SimpleUDFExample extends UDF {
 	 * 判断t1是否比t2大
 	 */
 	public boolean evaluate(Text t1, Text t2) {
+		// 检查null
 		if (t1 == null || t2 == null) {
 			return false;
 		}
