@@ -1,4 +1,4 @@
-package udf;
+package udf.udaf;
 
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFEvaluator;

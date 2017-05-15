@@ -1,4 +1,4 @@
-package udf.json;
+package udf.generic;
 
 import org.apache.hadoop.hive.ql.exec.UDFArgumentException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
@@ -16,6 +16,7 @@ public class GenericUDFJSONArray extends GenericUDF {
 			throw new UDFArgumentException(
 					"The function json_array(jsonArray");
 		}
+		//converter = ObjectInspector.
 		return null;
 	}
 

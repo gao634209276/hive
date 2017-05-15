@@ -12,10 +12,10 @@ UDF用户自定义函数(user defined function)
 		hql中使用
 	
 	
-	demo See:udf.udftest.java
+	demo See:udf.UDFtest.java
 	然后add jar /opt/app/jar/hiveudf.jar;
 	创建udf的function:
-		create temporary function bigthan as 'com.study.udf.udftest';
+		create temporary function bigthan as 'com.study.udf.UDFtest';
 	测试表m的数据:
 		A	1
 		C	5
@@ -79,7 +79,7 @@ Mode
 			这个阶段一般很少用到
 	};
 	通常hive会执行partital1,partial2,final三个阶段
-	See:udf.udaftest.java	udf.CountBigThan.java
+	See:udf.udaf.UDAFtest.java	udf.udaf.CountBigThan.java
 	
 mapreduce阶段流程概括:
 	原始数据data-->map阶段{

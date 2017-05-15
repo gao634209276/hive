@@ -1,4 +1,4 @@
-package udf;
+package udf.generic;
 
 import org.apache.hadoop.hive.ql.exec.Description;
 import org.apache.hadoop.hive.ql.exec.UDFArgumentException;
@@ -20,18 +20,21 @@ public class GenericUDFNvl extends GenericUDF {
 	private ObjectInspector[] argumentOIs;
 	private ReturnObjectInspectorResolver returnOIResolver;
 
+	/**
+	 * ObjectInspector:处理数据库你类型到java类型的映射,单例
+	 * ReturnObjectInspectorResolver : 当输入参数有多个,而每个参数的类型不同时,使这些参数转换类型,产生相同的ObjectInspector
+	 */
 	@Override
-	public ObjectInspector initialize(ObjectInspector[] arguments)
+	public ObjectInspector initialize(ObjectInspector[] arguments)// 使得不同类型的参数产生同一java类型的映射
 			throws UDFArgumentException {
 		argumentOIs = arguments;
 		if (arguments.length != 2) {
 			throw new UDFArgumentLengthException(
 					"The operator 'NVL' accepts 2 arguments");
 		}
-		returnOIResolver = new GenericUDFUtils.ReturnObjectInspectorResolver(
-				true);
-		if (!(returnOIResolver.update(arguments[0]) && returnOIResolver
-				.update(arguments[1]))) {
+		// 当多个参数的ObjectInspector不同时,是否转换成一致的
+		returnOIResolver = new GenericUDFUtils.ReturnObjectInspectorResolver(true);
+		if (!(returnOIResolver.update(arguments[0]) && returnOIResolver.update(arguments[1]))) {
 			throw new UDFArgumentTypeException(2,
 					"The 1st and 2nd args of function 'NVL' should have the same type, "
 							+ "but they are different: \""
@@ -43,8 +46,8 @@ public class GenericUDFNvl extends GenericUDF {
 
 	@Override
 	public Object evaluate(DeferredObject[] arguments) throws HiveException {
-		Object retVal = returnOIResolver.convertIfNecessary(arguments[0].get(),
-				argumentOIs[0]);
+		// 用ObjectInspector转化数据库类型为java类型
+		Object retVal = returnOIResolver.convertIfNecessary(arguments[0].get(), argumentOIs[0]);
 		if (retVal == null) {
 			retVal = returnOIResolver.convertIfNecessary(arguments[1].get(),
 					argumentOIs[0]);

@@ -3,7 +3,10 @@ package udf;
 import org.apache.hadoop.hive.ql.exec.UDF;
 import org.apache.hadoop.io.Text;
 
-public class udftest extends UDF {
+/**
+ * 用简单UDF API来构建一个UDF只涉及到编写一个类继承实现一个方法（evaluate），以下是示例：
+ */
+public class SimpleUDFExample extends UDF {
 
 	/**
 	 * 判断t1是否比t2大

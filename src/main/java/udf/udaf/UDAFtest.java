@@ -1,4 +1,4 @@
-package udf;
+package udf.udaf;
 
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
@@ -8,7 +8,7 @@ import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFParameterInfo;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 
 //udaf类继承AbstractGenericUDAFResolver
-public class udaftest extends AbstractGenericUDAFResolver {
+public class UDAFtest extends AbstractGenericUDAFResolver {
 	// 重写getEvaluator
 	@Override
 	public GenericUDAFEvaluator getEvaluator(GenericUDAFParameterInfo info)

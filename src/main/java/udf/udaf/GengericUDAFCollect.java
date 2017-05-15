@@ -1,4 +1,4 @@
-package udf;
+package udf.udaf;
 
 import org.apache.hadoop.hive.ql.exec.Description;
 import org.apache.hadoop.hive.ql.exec.UDFArgumentTypeException;
@@ -14,7 +14,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 public class GengericUDAFCollect extends AbstractGenericUDAFResolver {
 
 	public GengericUDAFCollect() {
-
 	}
 
 	@Override
