@@ -1,4 +1,4 @@
-MapReduce作业可以细分为map task和reduce task，而MRAppMaster又将map task和reduce task分为四种状态：
+fffdMapReduce作业可以细分为map task和reduce task，而MRAppMaster又将map task和reduce task分为四种状态：
 
 　　1、pending：刚启动但尚未向resourcemanager发送资源请求；
 
