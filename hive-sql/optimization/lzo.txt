@@ -78,3 +78,69 @@ example:
 	create table test_orc(name string)
 	stored as orcfile tblproperties ("orc.compress"="SNAPPY");
 
+
+create table test_tmp(name string);
+load data local inpath '/app/sinova/file' overwrite into table test_tmp;
+
+set mapred.output.compress=true;
+set hive.exec.compress.output=true;
+create table test_text(name string);
+insert overwrite table test_text select * from test_tmp;
+select * from test_text;
+dfs -ls hive/warehouse/test_text/*;
+dfs -text hive/warehouse/test_text/*;
+drop table if exists test_text;
+
+set hive.exec.compress.output=true;
+set mapred.output.compress=true;
+set mapred.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec;
+create table test_gz(name string);
+insert overwrite table test_gz select * from test_tmp;
+select * from test_gz;
+dfs -ls hive/warehouse/test_gz/*;
+dfs -text hive/warehouse/test_gz/*;
+drop table if exists test_gz;
+
+set hive.exec.compress.output=true;
+set mapred.output.compress=true;
+--set mapred.map.output.compression.codec=org.apache.hadoop.io.compress.SnappyCodec;
+set mapred.output.compression.codec=org.apache.hadoop.io.compress.SnappyCodec;
+create table test_snappy(name string);
+insert overwrite table test_snappy select * from test_tmp;
+select * from test_snappy;
+dfs -ls hive/warehouse/test_snappy/*;
+dfs -text hive/warehouse/test_snappy/*;
+drop table if exists test_snappy;
+
+set hive.exec.compress.output=true;
+set mapred.output.compress=true;
+create table if not exists test_orc( all string )
+STORED AS ORCFILE;
+insert overwrite table test_orc select * from test_tmp;
+select * from test_snappy;
+dfs -ls hive/warehouse/test_orc/*;
+dfs -text hive/warehouse/test_orc/*;
+drop table if exists test_orc;
+
+create table test_orc( all string )
+ROW FORMAT DELIMITED  FIELDS TERMINATED BY ','
+STORED AS ORCFILE TBLPROPERTIES ("orc.compress"="SNAPPY");
+stored as ORC;
+Sequence File是可分割的文件格式，支持Hadoop的block级压缩
+SORTED AS SEQUENCEFILE;
+Sequence Files有三个不同的压缩选项：NOE,RECORD和BLOCK。
+RECORD是默认选项，通常BLOCK会带来较RECORD更好的压缩性能。
+同很多其他压缩选项一样，这个压缩类型参数不是Hive特有的，需要在Hadoop中或在每一个Hive查询脚本中设置。
+set mapred.output.compression.type=BLOCK;
+SequenceFileOutputFormat;
+
+
+lzo
+create table test_lzo(name string)
+STORED AS INPUTFORMAT 'com.hadoop.mapred.DeprecatedLzoTextInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat';
+insert overwrite table test_lzo select * from test_tmp;
+
+create table test_seq(name string)
+stored as sequencefile;
+insert overwrite table test_seq select * from test_tmp;
