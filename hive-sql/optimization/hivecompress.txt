@@ -234,3 +234,15 @@ http://blog.csdn.net/cnbird2008/article/details/9182869
 
 Parquet与ORC性能测试报告
 http://blog.csdn.net/yu616568/article/details/51188479
+
+hive压缩与小文件优化
+http://blog.csdn.net/xpmars/article/details/43084309
+
+hive Har
+http://blog.csdn.net/dxl342/article/details/50932062
+
+	set hive.archive.enabled= true;
+	set hive.archive.har.parentdir.settable= true;
+	set har.partfile.size=1099511627776;
+	ALTER TABLE srcpart ARCHIVE PARTITION(ds= '2008-04-08', hr= '12' );
+	ALTER TABLE srcpart UNARCHIVE PARTITION(ds= '2008-04-08', hr= '12' );

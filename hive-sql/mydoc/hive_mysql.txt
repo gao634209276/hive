@@ -88,6 +88,7 @@ netstat -na | grep 3306
 mysql> insert into mysql.user(Host,User,Password) values("localhost","sqoop",password("sqoop"));
 mysql> flush privileges;
 mysql> grant all privileges on *.* to 'sqoop'@'192.168.%' identified by 'sqoop' with grant option;
+ grant all privileges on *.* to 'hive'@'localhost' identified by 'hive' with grant option;
 mysql> grant all privileges on *.* to 'sqoop'@'192.168.202.4' identified by 'sqoop' with grant option;
 mysql> flush privileges;
 
